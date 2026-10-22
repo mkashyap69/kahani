@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Absolute path of the repository root (where /assets and /data live). */
-export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+export const REPO_ROOT = process.env.KAHANI_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function num(name: string, fallback: number): number {
   const v = process.env[name];

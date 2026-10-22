@@ -19,18 +19,25 @@ export type StudioJob =
   | { kind: "sync-schedules" };
 
 let connection: Redis | undefined;
+let producer: Redis | undefined;
+/** Worker connection (BullMQ workers require maxRetriesPerRequest: null). */
 export function redis(): Redis {
   connection ??= new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   return connection;
 }
 export const bullConnection = (): ConnectionOptions => redis();
+/** Producer connection: fails fast (e.g. in the web app) instead of hanging when Redis is down. */
+function producerConnection(): Redis {
+  producer ??= new Redis(config.redisUrl, { maxRetriesPerRequest: 2, connectTimeout: 5000 });
+  return producer;
+}
 
 const queues = new Map<string, Queue>();
 export function queue(name: string): Queue {
   let q = queues.get(name);
   if (!q) {
     q = new Queue(name, {
-      connection: bullConnection(),
+      connection: producerConnection(),
       defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 15_000 }, removeOnComplete: 500, removeOnFail: 1000 },
     });
     queues.set(name, q);
@@ -92,5 +99,7 @@ export async function closeQueues() {
   await Promise.all([...queues.values()].map((q) => q.close()));
   queues.clear();
   await connection?.quit().catch(() => undefined);
+  await producer?.quit().catch(() => undefined);
   connection = undefined;
+  producer = undefined;
 }

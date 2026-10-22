@@ -12,7 +12,9 @@ export interface Storage {
   get(key: string): Promise<Buffer>;
   /** Download to a local path (for FFmpeg). Returns the local path. */
   download(key: string, filePath: string): Promise<string>;
-  stream(key: string): Promise<Readable>;
+  /** byte range is inclusive, like HTTP Range */
+  stream(key: string, range?: { start: number; end: number }): Promise<Readable>;
+  size(key: string): Promise<number>;
   exists(key: string): Promise<boolean>;
   delete(key: string): Promise<void>;
 }
@@ -40,9 +42,12 @@ class LocalStorage implements Storage {
     await fs.copyFile(this.p(key), filePath);
     return filePath;
   }
-  async stream(key: string) {
+  async stream(key: string, range?: { start: number; end: number }) {
     await fs.access(this.p(key));
-    return createReadStream(this.p(key));
+    return createReadStream(this.p(key), range);
+  }
+  async size(key: string) {
+    return (await fs.stat(this.p(key))).size;
   }
   async exists(key: string) {
     return fs.access(this.p(key)).then(
@@ -91,9 +96,15 @@ class S3Storage implements Storage {
     await fs.writeFile(filePath, await this.get(key));
     return filePath;
   }
-  async stream(key: string) {
-    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+  async stream(key: string, range?: { start: number; end: number }) {
+    const res = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: range ? `bytes=${range.start}-${range.end}` : undefined }),
+    );
     return res.Body as Readable;
+  }
+  async size(key: string) {
+    const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+    return head.ContentLength ?? 0;
   }
   async exists(key: string) {
     try {

@@ -118,7 +118,7 @@ export class YouTubePublisher implements Publisher {
           const res = await fetch(session!, {
             method: "PUT",
             headers: { Authorization: `Bearer ${await token()}`, "Content-Length": String(chunk.length), "Content-Range": `bytes ${offset}-${end}/${size}` },
-            body: chunk,
+            body: new Uint8Array(chunk),
           });
           if (res.status >= 500) throw Object.assign(new Error(`YouTube upload ${res.status}`), { status: res.status });
           return res;

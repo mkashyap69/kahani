@@ -1,0 +1,228 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { CheckCircle2, ExternalLink, RotateCcw, XCircle } from "lucide-react";
+import { prisma, type Script } from "@kahani/core";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input, Field, Textarea } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ActionButton, AutoRefresh, SubmitButton } from "@/components/client";
+import { StageChips, StatusBadge } from "@/components/status";
+import { ShotCard } from "@/components/shot-card";
+import { PageHeader } from "@/components/page-header";
+import { approveAction, rejectAction, rerunAction, retryAction, saveMetaAction } from "@/app/actions";
+import { assetUrl, duration, inr } from "@/lib/utils";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+
+export const dynamic = "force-dynamic";
+
+const RUNNING = ["SCRIPTING", "IMAGING", "VOICING", "ANIMATING", "ASSEMBLING", "PUBLISHING", "QUEUED"];
+
+export default async function ContentDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const item = await prisma.contentItem.findUnique({
+    where: { id },
+    include: { channel: { include: { theme: { include: { characters: true, locations: true } } } }, shots: { orderBy: { idx: "asc" } }, parent: true, children: true },
+  });
+  if (!item) notFound();
+  const costs = await prisma.apiCallLog.groupBy({
+    by: ["provider", "operation"],
+    where: { contentItemId: id },
+    _sum: { costInr: true, inputTokens: true, outputTokens: true, characters: true, images: true },
+    _count: true,
+  });
+  const script = item.scriptJson as unknown as Script | null;
+  const meta = (item.youtubeMeta ?? script?.youtube ?? null) as Script["youtube"] | null;
+  const vertical = item.type === "SHORT";
+  const video = assetUrl(item.videoKey);
+  const running = RUNNING.includes(item.status);
+  const editable = !running && item.status !== "PUBLISHED" && item.shots.length > 0;
+  const chars = item.channel.theme.characters.map((c) => c.key);
+  const locs = item.channel.theme.locations.map((l) => l.key);
+  const localDT = item.scheduledPublishAt ? new Date(item.scheduledPublishAt.getTime() - item.scheduledPublishAt.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+
+  return (
+    <div className="space-y-6">
+      <AutoRefresh enabled={running} ms={4000} />
+      <PageHeader
+        title={<span className="deva">{item.title ?? "Untitled"}</span>}
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            <Link href={`/channels/${item.channelId}`} className="hover:underline">{item.channel.name}</Link>·
+            <span>{item.type === "STORY" ? `Story episode ${item.episodeNumber ?? ""}` : `Short #${item.slot} (${item.channel.shortsMode === "TEASER" ? "teaser" : "mini-story"})`}</span>·
+            <span>{duration(item.durationSec)}</span>·<span>{inr(item.costInr)}</span>
+            {item.parent && (
+              <>
+                · <Link className="text-primary hover:underline" href={`/content/${item.parent.id}`}>teases: {item.parent.title ?? "story"}</Link>
+              </>
+            )}
+          </span>
+        }
+      >
+        <StatusBadge status={item.status} />
+        {item.status === "REVIEW" && (
+          <>
+            <ActionButton variant="success" action={approveAction.bind(null, item.id)}>
+              <CheckCircle2 /> Approve &amp; publish
+            </ActionButton>
+            <ActionButton variant="outline" action={rejectAction.bind(null, item.id, undefined)} confirm="Reject this video?">
+              <XCircle /> Reject
+            </ActionButton>
+          </>
+        )}
+        {item.status === "FAILED" && (
+          <ActionButton action={retryAction.bind(null, item.id)}>
+            <RotateCcw /> Retry {item.failedStage?.toLowerCase()}
+          </ActionButton>
+        )}
+        {item.youtubeVideoId && !item.youtubeVideoId.startsWith("mock_") && (
+          <a href={`https://youtu.be/${item.youtubeVideoId}`} target="_blank" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            YouTube <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </PageHeader>
+
+      <StageChips status={item.status} failedStage={item.failedStage} />
+      {item.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{item.error}</p>}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Video</CardTitle>
+            {script && (
+              <CardDescription>
+                {script.logline} {script.moral && <span className="deva block pt-1">सीख: {script.moral}</span>}
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent>
+            {video ? (
+              <video controls preload="metadata" poster={assetUrl(item.thumbnailKey) ?? undefined} src={video} className={`w-full rounded-md bg-black ${vertical ? "mx-auto max-h-[70vh] w-auto" : ""}`} />
+            ) : (
+              <div className={`grid place-items-center rounded-md bg-muted text-sm text-muted-foreground ${vertical ? "mx-auto aspect-[9/16] max-h-[60vh]" : "aspect-video"}`}>
+                {running ? "Rendering…" : "No video yet"}
+              </div>
+            )}
+            {editable && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                Re-run from:
+                {(["script", "images", "voices", "motion", "assemble"] as const).map((s) => (
+                  <ActionButton key={s} size="sm" variant="outline" action={rerunAction.bind(null, item.id, s)} confirm={s === "script" ? "Rewrite the whole script? All shots will be regenerated." : undefined}>
+                    {s}
+                  </ActionButton>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>YouTube metadata</CardTitle>
+              <CardDescription>
+                Uploaded {item.channel.madeForKids ? "as made-for-kids" : "as not made-for-kids"} with the AI/synthetic-content disclosure on.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {meta ? (
+                <form action={saveMetaAction} className="space-y-3">
+                  <input type="hidden" name="itemId" value={item.id} />
+                  {item.thumbnailKey && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={assetUrl(item.thumbnailKey)!} alt="thumbnail" className={`rounded-md border ${vertical ? "h-48" : "w-full"}`} />
+                  )}
+                  <Field label="Title">
+                    <Input name="title" defaultValue={meta.title} maxLength={100} className="deva" />
+                  </Field>
+                  <Field label="Description">
+                    <Textarea name="description" defaultValue={meta.description} rows={5} className="deva" />
+                  </Field>
+                  <Field label="Tags" hint="comma separated">
+                    <Input name="tags" defaultValue={meta.tags?.join(", ")} />
+                  </Field>
+                  <Field label="Scheduled publish time" hint="empty = publish immediately when approved">
+                    <Input type="datetime-local" name="scheduledPublishAt" defaultValue={localDT} />
+                  </Field>
+                  <SubmitButton size="sm" disabled={item.status === "PUBLISHED"}>
+                    Save metadata
+                  </SubmitButton>
+                </form>
+              ) : (
+                <p className="text-sm text-muted-foreground">Available once the script is written.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Provider</TH>
+                    <TH>Operation</TH>
+                    <TH className="text-right">Calls</TH>
+                    <TH className="text-right">Usage</TH>
+                    <TH className="text-right">₹</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {costs.map((c) => (
+                    <TR key={c.provider + c.operation}>
+                      <TD>{c.provider}</TD>
+                      <TD>{c.operation}</TD>
+                      <TD className="text-right">{c._count}</TD>
+                      <TD className="text-right text-xs text-muted-foreground">
+                        {c._sum.inputTokens ? `${c._sum.inputTokens}/${c._sum.outputTokens} tok` : c._sum.characters ? `${c._sum.characters} chars` : c._sum.images ? `${c._sum.images} img` : "—"}
+                      </TD>
+                      <TD className="text-right">{(c._sum.costInr ?? 0).toFixed(2)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {item.safetyReport && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Safety review</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                {(() => {
+                  const r = item.safetyReport as { safe: boolean; severity: string; issues: { shot_id: number | null; problem: string }[] };
+                  return (
+                    <>
+                      <Badge variant={r.safe ? "success" : "destructive"}>{r.safe ? "passed" : "blocked"} · {r.severity}</Badge>
+                      {r.issues.map((i, k) => (
+                        <p key={k} className="text-xs text-muted-foreground">
+                          shot {i.shot_id ?? "?"}: {i.problem}
+                        </p>
+                      ))}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Shots &amp; script ({item.shots.length})</CardTitle>
+          <CardDescription>Edit any line — only the affected shots are re-imaged / re-voiced, then the video is re-assembled.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className={`grid gap-3 ${vertical ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"}`}>
+            {item.shots.map((s) => (
+              <ShotCard key={s.id} shot={s} itemId={item.id} vertical={vertical} characters={chars} locations={locs} editable={editable} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
