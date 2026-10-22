@@ -75,6 +75,7 @@ export function estimateCostInr(u: UsageRecord): number {
 /** Persist an API call + roll its cost into the content item. Never throws. */
 export async function logApiCall(u: UsageRecord): Promise<number> {
   const costInr = u.costInr ?? (u.success === false ? 0 : estimateCostInr(u));
+  if (!process.env.DATABASE_URL) return costInr; // e.g. unit tests
   try {
     await prisma.apiCallLog.create({
       data: {

@@ -36,3 +36,4 @@ export { SARVAM_V3_VOICES, voiceCatalog, castVoices, type VoiceInfo } from "./pr
 export * from "./pipeline/compare.js";
 export * from "./providers/image-models.js";
 export { generateShotImage } from "./pipeline/images.js";
+export * from "./providers/video-models.js";

@@ -16,7 +16,7 @@ export async function runMotionStage(itemId: string): Promise<void> {
   const item = await loadItem(itemId);
   const settings = await getSettings();
   const targets = await targetsFor(item.type);
-  const provider = await motionProvider(item.channel.motionProvider);
+  const provider = await motionProvider(item.channel.motionProvider, item.channel.motionScope);
   const kenBurns = new KenBurnsProvider();
   const dir = await workDir(itemId, "clips");
 
@@ -25,7 +25,7 @@ export async function runMotionStage(itemId: string): Promise<void> {
 
   const { errors } = await mapLimit(item.shots, settings.motionConcurrency, async (shot) => {
     const speaking = !!shot.audioKey && shot.speaker !== "narrator";
-    const p = provider.handles({ framing: shot.framing, speaking }) ? provider : kenBurns;
+    const p = provider.handles({ framing: shot.framing, speaking, contentType: item.type }) ? provider : kenBurns;
     const hash = hashOf({
       image: shot.imageHash,
       audio: p === kenBurns ? null : shot.audioHash,
@@ -51,6 +51,8 @@ export async function runMotionStage(itemId: string): Promise<void> {
         height: targets.height,
         fps: targets.fps,
         seed: shot.idx,
+        contentType: item.type,
+        prompt: [shot.action, `Emotion: ${shot.emotion}.`, shot.speaker && shot.speaker !== "narrator" ? `${shot.speaker} is speaking.` : ""].filter(Boolean).join(" "),
       },
       { contentItemId: itemId, operation: "motion" },
     );

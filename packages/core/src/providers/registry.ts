@@ -6,7 +6,8 @@ import { GeminiBatch, GeminiImage, GeminiJudge } from "./gemini.js";
 import { FalImage } from "./fal-image.js";
 import { DEFAULT_IMAGE_MODEL, imageModelInfo } from "./image-models.js";
 import { SarvamTTS } from "./sarvam.js";
-import { FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
+import { FalImageToVideoProvider, FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
+import { videoModelInfo } from "./video-models.js";
 import { YouTubePublisher } from "./youtube.js";
 import { MockLLM } from "./mock/llm.js";
 import { MockImage, MockImageBatch, MockJudge } from "./mock/image.js";
@@ -65,8 +66,13 @@ export async function musicProvider(): Promise<MusicProvider> {
   return k ? new ElevenLabsMusic(k, config.elevenMusicModel) : new MockMusic();
 }
 
-/** Per-channel motion provider: "kenburns" (default) or "lipsync" (fal.ai for close-up dialogue). */
-export async function motionProvider(channelMotion: string): Promise<MotionProvider> {
+/** Per-channel motion provider: "kenburns" (default), "lipsync" (fal.ai close-up dialogue) or an "i2v:…" video model. */
+export async function motionProvider(channelMotion: string, scope = "closeups"): Promise<MotionProvider> {
+  if (channelMotion.startsWith("i2v:")) {
+    const k = config.providerMode === "mock" ? undefined : await getSecret("FAL_KEY");
+    if (k) return new FalImageToVideoProvider(k, videoModelInfo(channelMotion), scope);
+    return new KenBurnsProvider();
+  }
   if (channelMotion === "lipsync") {
     const k = config.providerMode === "mock" ? undefined : await getSecret("FAL_KEY");
     if (k) return new FalLipSyncProvider(k, config.falLipsyncModel);

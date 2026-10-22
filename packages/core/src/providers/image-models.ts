@@ -15,6 +15,8 @@ export interface ImageModelInfo {
   falText?: string;
   maxRefs: number;
   notes: string;
+  /** how the endpoint takes the output size (fal models differ) */
+  sizeParam?: "image_size" | "resolution_aspect";
 }
 
 export const IMAGE_MODELS: ImageModelInfo[] = [
@@ -66,6 +68,29 @@ export const IMAGE_MODELS: ImageModelInfo[] = [
     falText: "fal-ai/qwen-image",
     maxRefs: 3,
     notes: "open weights (self-hostable); ~3 references",
+  },
+  {
+    id: "fal:flux-3-image",
+    label: "FLUX 3 Image (via fal)",
+    provider: "fal",
+    usd: 0.048, // 1 MP tier
+    falEdit: "blackforestlabs/flux-3/edit-image",
+    falText: "blackforestlabs/flux-3/text-to-image",
+    maxRefs: 10,
+    sizeParam: "resolution_aspect",
+    notes: "newest FLUX; 1–10 references; priced by resolution tier",
+  },
+  {
+    id: "fal:flux-3-klein",
+    label: "FLUX 3 Image Klein (via fal)",
+    provider: "fal",
+    // listed $0.008–0.036 by resolution tier (fal marks these as planned prices); ~1 MP estimate
+    usd: 0.016,
+    falEdit: "blackforestlabs/flux-3/klein/edit-image",
+    falText: "blackforestlabs/flux-3/klein/text-to-image",
+    maxRefs: 4,
+    sizeParam: "image_size",
+    notes: "small and cheap — test on wides/backgrounds; consistency unproven",
   },
 ];
 

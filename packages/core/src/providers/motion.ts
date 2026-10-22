@@ -3,7 +3,29 @@ import path from "node:path";
 import { ffmpeg, probeDuration, x264Args } from "../media/ffmpeg.js";
 import { logApiCall } from "../cost.js";
 import { sleep, withRetry } from "../util/retry.js";
+import sharp from "sharp";
+import { config } from "../config.js";
+import { NonRetryableError } from "../util/retry.js";
+import { inMotionScope, videoUsdPerSec, type VideoModelInfo } from "./video-models.js";
 import type { CallContext, MotionProvider, MotionRequest } from "./types.js";
+
+/** Normalise any provider clip to exactly the shot: size, fps, frame count, no audio. */
+async function fitClip(raw: string, req: MotionRequest) {
+  const srcDur = await probeDuration(raw);
+  const frames = Math.round(req.durationSec * req.fps);
+  await ffmpeg([
+    "-i",
+    raw,
+    "-vf",
+    `scale=${req.width}:${req.height}:force_original_aspect_ratio=increase,crop=${req.width}:${req.height},fps=${req.fps},tpad=stop_mode=clone:stop_duration=${Math.max(0, req.durationSec - srcDur + 0.1).toFixed(3)},setsar=1,format=yuv420p`,
+    "-frames:v",
+    String(frames),
+    "-an",
+    ...x264Args({ fps: req.fps, bitrateK: 0, intermediate: true }),
+    req.outPath,
+  ]);
+  return srcDur;
+}
 
 /**
  * Builds the zoompan expressions for a shot.
@@ -92,7 +114,7 @@ export class FalLipSyncProvider implements MotionProvider {
     private fallback: MotionProvider = new KenBurnsProvider(),
   ) {}
 
-  handles(req: Pick<MotionRequest, "framing" | "speaking">) {
+  handles(req: Pick<MotionRequest, "framing" | "speaking" | "contentType">) {
     return req.framing === "closeup" && req.speaking;
   }
 
@@ -126,24 +148,84 @@ export class FalLipSyncProvider implements MotionProvider {
       if (!result.video?.url) throw new Error("fal returned no video");
       const raw = req.outPath.replace(/\.mp4$/, ".fal.mp4");
       await fs.writeFile(raw, Buffer.from(await (await fetch(result.video.url)).arrayBuffer()));
-      const srcDur = await probeDuration(raw);
-      const frames = Math.round(req.durationSec * req.fps);
-      await ffmpeg([
-        "-i",
-        raw,
-        "-vf",
-        `scale=${req.width}:${req.height}:force_original_aspect_ratio=increase,crop=${req.width}:${req.height},fps=${req.fps},tpad=stop_mode=clone:stop_duration=${Math.max(0, req.durationSec - srcDur + 0.1).toFixed(3)},setsar=1,format=yuv420p`,
-        "-frames:v",
-        String(frames),
-        "-an",
-        ...x264Args({ fps: req.fps, bitrateK: 0, intermediate: true }),
-        req.outPath,
-      ]);
+      const srcDur = await fitClip(raw, req);
       await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.model, operation: "lipsync", seconds: srcDur });
     } catch (err) {
       await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.model, operation: "lipsync", success: false, error: String(err) });
       // never fail an episode because the optional add-on failed
       console.warn(`[motion] lip-sync failed, falling back to Ken Burns: ${err}`);
+      await this.fallback.animate(req, ctx);
+    }
+  }
+}
+
+/**
+ * Image-to-video via fal (e.g. FLUX 3 Max): animates the shot's still into a short clip —
+ * blinks, lip movement, gestures — then trims it to the shot's exact duration. The model's
+ * own audio is dropped; dialogue, music and SFX are mixed by the assembler as usual.
+ * Shots outside the channel's motion scope (and any failure) fall back to Ken Burns.
+ */
+export class FalImageToVideoProvider implements MotionProvider {
+  readonly name: string;
+  constructor(
+    private apiKey: string,
+    private info: VideoModelInfo,
+    private scope: string,
+    private fallback: MotionProvider = new KenBurnsProvider(),
+  ) {
+    this.name = info.id;
+  }
+
+  handles(req: Pick<MotionRequest, "framing" | "speaking" | "contentType">) {
+    return inMotionScope(this.scope, { framing: req.framing, speaking: req.speaking, contentType: req.contentType ?? "STORY" });
+  }
+
+  async animate(req: MotionRequest, ctx: CallContext): Promise<void> {
+    if (!this.handles(req)) return this.fallback.animate(req, ctx);
+    const seconds = Math.min(this.info.maxSec, Math.max(this.info.minSec, Math.ceil(req.durationSec)));
+    const headers = { Authorization: `Key ${this.apiKey}`, "content-type": "application/json" };
+    const jpg = await sharp(await fs.readFile(req.imagePath)).resize(1280, 1280, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+    const input = {
+      image_url: `data:image/jpeg;base64,${jpg.toString("base64")}`,
+      prompt: [
+        "2D Indian cartoon animation. Keep the art style, characters, outfits, colours and background exactly as in the image.",
+        req.prompt ?? "",
+        req.speaking ? "The speaking character talks with natural lip movement and small expressive gestures; others react subtly." : "Gentle ambient motion: blinking, breathing, light movement in the background.",
+        "Mostly static camera. No new characters, no text, no scene change.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      duration: seconds,
+      resolution: "720p",
+      aspect_ratio: req.height > req.width ? "9:16" : "16:9",
+    };
+    try {
+      const submit = await withRetry(async () => {
+        const res = await fetch(`https://queue.fal.run/${this.info.endpoint}`, { method: "POST", headers, body: JSON.stringify(input) });
+        if (!res.ok) {
+          const text = await res.text();
+          throw Object.assign(res.status >= 400 && res.status < 500 && res.status !== 429 ? new NonRetryableError(`fal ${res.status}: ${text}`) : new Error(`fal ${res.status}: ${text}`), { status: res.status });
+        }
+        return (await res.json()) as { status_url: string; response_url: string };
+      });
+      const deadline = Date.now() + 15 * 60_000;
+      for (;;) {
+        if (Date.now() > deadline) throw new Error("fal image-to-video timed out");
+        await sleep(5000);
+        const st = (await (await fetch(submit.status_url, { headers })).json()) as { status: string };
+        if (st.status === "COMPLETED") break;
+        if (st.status === "FAILED" || st.status === "ERROR") throw new Error(`fal job failed: ${JSON.stringify(st)}`);
+      }
+      const result = (await (await fetch(submit.response_url, { headers })).json()) as { video?: { url: string } };
+      if (!result.video?.url) throw new Error(`fal returned no video: ${JSON.stringify(result).slice(0, 300)}`);
+      const raw = req.outPath.replace(/\.mp4$/, ".i2v.mp4");
+      await fs.writeFile(raw, Buffer.from(await (await fetch(result.video.url)).arrayBuffer()));
+      await fitClip(raw, req);
+      const usd = videoUsdPerSec(this.info) * seconds;
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.info.id, operation: "image-to-video", seconds, costInr: usd * config.usdToInr });
+    } catch (err) {
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.info.id, operation: "image-to-video", success: false, error: String(err) });
+      console.warn(`[motion] ${this.info.id} failed, falling back to Ken Burns: ${err}`);
       await this.fallback.animate(req, ctx);
     }
   }

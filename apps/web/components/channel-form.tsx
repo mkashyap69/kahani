@@ -1,4 +1,4 @@
-import { IMAGE_MODELS, type Channel } from "@kahani/core";
+import { IMAGE_MODELS, MOTION_SCOPES, VIDEO_MODELS, videoUsdPerSec, type Channel } from "@kahani/core";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Select, Switch } from "@/components/ui/input";
 import { SubmitButton } from "@/components/client";
@@ -86,10 +86,28 @@ export function ChannelForm({ channel, themes, musicPacks }: { channel?: Channel
               ))}
             </Select>
           </Field>
-          <Field label="Motion" hint="lip-sync uses fal.ai for close-up dialogue shots only (extra cost)">
+          <Field label="Motion" hint="image-to-video animates the still (blinks, talking, gestures); shots outside the scope, and any failure, use free Ken Burns">
             <Select name="motionProvider" defaultValue={c?.motionProvider ?? "kenburns"}>
               <option value="kenburns">Ken Burns pan/zoom (free)</option>
               <option value="lipsync">Ken Burns + lip-sync close-ups (fal.ai)</option>
+              {VIDEO_MODELS.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label} · ${videoUsdPerSec(v).toFixed(4)}/s
+                  {v.usdPerSec.promoUntil && videoUsdPerSec(v) === v.usdPerSec.promo ? ` (promo until ${v.usdPerSec.promoUntil}, then $${v.usdPerSec.list}/s)` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Image-to-video scope"
+            hint="which shots the video model animates — rough cost at ~4 s/shot: close-ups ≈ 40 shots/story, all ≈ 140 shots/story (min 5 s billed per shot)"
+          >
+            <Select name="motionScope" defaultValue={c?.motionScope ?? "closeups"}>
+              {MOTION_SCOPES.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label="Thumbnail style">

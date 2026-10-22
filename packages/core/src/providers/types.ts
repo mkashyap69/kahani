@@ -113,12 +113,15 @@ export interface MotionRequest {
   fps: number;
   /** deterministic variety between shots */
   seed: number;
+  /** what the shot shows / says — used by image-to-video models */
+  prompt?: string;
+  contentType?: "STORY" | "SHORT";
 }
 
 export interface MotionProvider {
   readonly name: string;
   /** whether this provider wants to handle this shot (others fall back to Ken Burns) */
-  handles(req: Pick<MotionRequest, "framing" | "speaking">): boolean;
+  handles(req: Pick<MotionRequest, "framing" | "speaking" | "contentType">): boolean;
   /** writes a silent H.264 clip of exactly durationSec to outPath */
   animate(req: MotionRequest, ctx: CallContext): Promise<void>;
 }

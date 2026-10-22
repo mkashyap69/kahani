@@ -182,9 +182,11 @@ for wide, medium, close-up and over-the-shoulder shots and for thumbnails. The a
 | `fal:seedream-4.5` | 0.04 | up to ~10 reference images |
 | `fal:flux-2-pro` | ~0.06 (priced per megapixel) | FLUX.2 [pro] edit |
 | `fal:qwen-image-edit-2511` | ~0.03 | open model (Apache-2.0), ~3 references |
+| `fal:flux-3-image` | ~0.048 (1 MP tier) | newest FLUX; 1–10 references; `resolution` + `aspect_ratio` inputs |
+| `fal:flux-3-klein` | ~0.008–0.036 (fal lists these as planned prices) | small and cheap; test it on wides and backgrounds |
 
-The catalog lives in `packages/core/src/providers/image-models.ts`. The fal endpoints are `fal-ai/bytedance/seedream/v4.5/edit`, `fal-ai/flux-2-pro/edit` and
-`fal-ai/qwen-image-edit-2511`, with matching text-to-image endpoints when a shot has no reference images.
+The catalog lives in `packages/core/src/providers/image-models.ts`. The fal endpoints are `fal-ai/bytedance/seedream/v4.5/edit`, `fal-ai/flux-2-pro/edit`,
+`fal-ai/qwen-image-edit-2511`, `blackforestlabs/flux-3/edit-image` and `blackforestlabs/flux-3/klein/edit-image`, with matching text-to-image endpoints when a shot has no reference images.
 Reference images are sent as data URIs. Check fal's live API schema if a request is rejected.
 The asset cache key includes the model, so switching a model regenerates only the shots that use it.
 
@@ -205,6 +207,16 @@ There is one call per line, using the character's speaker, pitch, pace and loudn
 `KenBurnsProvider` (free) uses FFmpeg `zoompan`: a slow pan for wide shots, a push-in for close-ups, a gentle drift for medium shots, and a subtle
 "breathing" scale. Frames are rendered at 2× and downscaled to avoid jitter.
 `FalLipSyncProvider` (per-channel toggle) is used **only for close-up dialogue shots** and falls back to Ken Burns on error.
+
+**Image-to-video (FLUX 3 Max).** Set a channel's **Motion** to *FLUX 3 Max image-to-video*. The model turns each still into a short animated clip,
+with blinks, lip movement, gestures and ambient motion, using a prompt built from the shot's action and emotion.
+- The clip is trimmed to the shot's exact length, and the model's own audio is dropped (dialogue still comes from Sarvam).
+- **Scope** decides which shots are animated: close-up dialogue only (default), every speaking shot, every shot in Shorts, or every shot.
+  Everything outside the scope, and any failed call, uses free Ken Burns.
+- **Cost:** endpoint `blackforestlabs/flux-3-max/image-to-video`, 720p, billed per output second with a minimum of 5 s per shot.
+  The promo price of $0.0425/s runs until 2026-11-07, then $0.17/s; set `FLUX_3_MAX_USD_PER_SEC` to override.
+  At ~4 s per shot, close-ups only (~40 shots) cost about ₹750 per story at promo and ₹3,000 at list price;
+  every shot (~140) costs about ₹2,600 at promo and ₹10,500 at list price.
 
 **5. Assembly (FFmpeg).**
 - Consecutive shots in the same location are joined with hard cuts. Location changes get 0.5s crossfades, and the timeline is padded so audio stays in sync.
@@ -337,6 +349,8 @@ npm test
 - `test/script-schema.test.ts`: script JSON validation (fences/prose, normalisation, Devanagari, line length, unknown keys, shot bounds)
 - `test/duration.test.ts`: the shot duration rule, frame alignment, the status machine, timezone scheduling
 - `test/kit.test.ts`: launch-kit schema validation and repair parsing, kid-safety enforcement, voice casting (gender/age fit, distinct voices, clamping, v2/v3 catalogs), music moods
+- `test/fal-models.test.ts`: FLUX 3 Max promo/list pricing and scope rules, fal request shapes (FLUX 3 `resolution`/`aspect_ratio` vs `image_size`),
+  and FalImage / image-to-video against a fake fal server, including trimming a 6 s clip with audio to an exact silent 3.4 s shot and the Ken Burns fallback
 - `test/image-models.test.ts`: per-shot-type model selection, catalog validation, comparison shot picking, and the batch submit/poll contract
 - `test/assembly.test.ts`: renders a **3-shot fixture** (two locations → one crossfade, two dialogue lines + one silent shot)
   through Ken Burns + loudness normalisation + full assembly with music, SFX, subtitles, intro and outro. It checks codecs, size,

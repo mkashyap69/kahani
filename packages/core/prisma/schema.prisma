@@ -72,8 +72,10 @@ model Channel {
   aiDisclosure       Boolean    @default(true)
   autoPublish        Boolean    @default(false)
   shortsMode         ShortsMode @default(TEASER)
-  /// "kenburns" (free) or "lipsync" (close-up dialogue shots go through fal.ai)
+  /// "kenburns" (free), "lipsync" (fal lip-sync on close-up dialogue) or a video model id, e.g. "i2v:flux-3-max"
   motionProvider     String     @default("kenburns")
+  /// which shots get the paid motion model: "closeups" | "dialogue" | "shorts" | "all" (the rest use Ken Burns)
+  motionScope        String     @default("closeups")
   /// Story target length in minutes (8–15)
   storyTargetMinutes Int        @default(10)
   /// image model per shot type: { default, wide, medium, closeup, over_shoulder, thumbnail } → model id (see IMAGE_MODELS)
