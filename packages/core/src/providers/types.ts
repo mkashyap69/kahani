@@ -1,6 +1,8 @@
 /** Every provider call carries the content item it is billed to. */
 export interface CallContext {
   contentItemId?: string | null;
+  /** billed to a channel launch kit instead of a content item */
+  launchKitId?: string | null;
   operation?: string;
 }
 
@@ -17,6 +19,8 @@ export interface LLMRequest {
   images?: { mime: string; data: Buffer }[];
   /** "low" for cheap checks, "high" for script writing */
   effort?: "low" | "medium" | "high";
+  /** let the model research the live web (Anthropic server-side web search) */
+  webSearch?: { maxUses: number };
 }
 
 export interface LLMResponse {
@@ -24,6 +28,8 @@ export interface LLMResponse {
   inputTokens: number;
   outputTokens: number;
   stopReason?: string | null;
+  /** pages the model read while researching */
+  sources?: { title: string; url: string }[];
 }
 
 export interface LLMProvider {
@@ -32,7 +38,7 @@ export interface LLMProvider {
   complete(req: LLMRequest, ctx: CallContext): Promise<LLMResponse>;
 }
 
-export type Aspect = "16:9" | "9:16";
+export type Aspect = "16:9" | "9:16" | "1:1";
 
 export interface ImageRequest {
   prompt: string;
@@ -77,6 +83,23 @@ export interface TTSProvider {
   voices(): { id: string; label: string; gender: "female" | "male" }[];
 }
 
+export interface MusicRequest {
+  prompt: string;
+  lengthSec: number;
+  instrumental: boolean;
+  /** used by the offline mock to vary the synthesised track */
+  mood?: string;
+}
+
+/** Background-music generator (e.g. ElevenLabs Eleven Music). */
+export interface MusicProvider {
+  readonly name: string;
+  readonly model: string;
+  /** commercial-use note stored with each generated track */
+  readonly license: string;
+  generate(req: MusicRequest, ctx: CallContext): Promise<{ data: Buffer; mime: string; ext: string }>;
+}
+
 export interface MotionRequest {
   imagePath: string;
   /** normalised dialogue audio, when the shot has a line */
@@ -111,6 +134,8 @@ export interface PublishRequest {
   /** YouTube "altered or synthetic content" disclosure — always true for this studio */
   containsSyntheticMedia: true;
   language: string;
+  /** add the upload to this playlist */
+  playlistId?: string | null;
   /** resumable upload session URI from a previous attempt */
   resumeSession?: string | null;
   onSession?: (uri: string) => Promise<void>;

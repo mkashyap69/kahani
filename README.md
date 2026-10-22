@@ -15,6 +15,9 @@ script (Claude) ─▶ safety check ─▶ images (Nano Banana) ─▶ voices (S
    ─▶ assembly (FFmpeg: crossfades, ducked music, SFX, Hindi subtitles, intro/outro) ─▶ review ─▶ YouTube upload ─▶ story memory
 ```
 
+To start a new channel, the **Launch Kit** takes a one-line idea, researches the niche on the live web, and designs the channel:
+name options, branding, series bible, cast with voices, locations and background music. You review it and create the channel with one click.
+
 You can re-run any stage, and every stage can resume where it stopped. Each shot asset (image, voice line, clip) is keyed by a hash of
 its inputs. Retrying a stage only regenerates the shots that are missing or whose inputs changed. If
 Sarvam fails on shot 87, the retry only re-voices shot 87.
@@ -107,7 +110,8 @@ The `migrate` service applies migrations and seeds the demo channel. Assets are 
 | `PROVIDER_MODE` | `auto` (real provider when a key exists, else mock), `mock`, or `live` (fail if a key is missing) |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude for scripts/safety/memory. Default `claude-sonnet-5-5` (also changeable in Settings). `ANTHROPIC_FALLBACKS=off` disables server-side refusal fallbacks |
 | `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`, `GEMINI_VISION_MODEL` | Nano Banana (`gemini-2.5-flash-image`) and the consistency judge (`gemini-2.5-flash`) |
-| `SARVAM_API_KEY`, `SARVAM_TTS_MODEL` | Sarvam Bulbul TTS (`bulbul:v2` supports pitch/pace/loudness) |
+| `SARVAM_API_KEY`, `SARVAM_TTS_MODEL` | Sarvam Bulbul TTS. `bulbul:v2` (default) has 7 voices with pitch/pace/loudness; `bulbul:v3` has about 37 voices (pace only). Voice pickers and the launch-kit caster follow this setting |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_MUSIC_MODEL` | Background music generation with ElevenLabs Eleven Music (default model `music_v1`). Without a key, music is a synthesised placeholder |
 | `FAL_KEY`, `FAL_LIPSYNC_MODEL` | Optional fal.ai lip-sync for close-up dialogue shots (default `veed/fabric-1.0`) |
 | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | Google OAuth client (YouTube Data API v3) |
 | `IMAGE_CONCURRENCY`, `TTS_CONCURRENCY`, `MOTION_CONCURRENCY` | Defaults for the per-stage limits (editable in Settings) |
@@ -207,6 +211,8 @@ Uploads use the YouTube Data API v3 resumable protocol. The upload session URI i
 | **Story Memory** `/themes/[id]/memory` | View/edit the rolling memory and open threads; add "next episode should…" directives |
 | **Content detail** `/content/[id]` | Video player, thumbnail, YouTube metadata + schedule editor, cost breakdown, safety report, shot grid (image + audio + regenerate image/voice), inline **script editor**: editing a line re-runs only the affected shots |
 | **Review Queue** `/review` | Watch and **Approve & publish** or **Reject** |
+| **Launch Kit** `/launch` | One-line idea → researched, editable channel package → **Create channel** (see below) |
+| **Music** `/music` | Music packs: generate instrumental tracks (Eleven Music), upload tracks you've licensed (with a required licence note), preview, delete |
 | **Settings** `/settings` | Encrypted API keys, script model, concurrency limits, consistency check, max shots, monthly budget cap |
 
 The image/voice/sheet/style-test jobs run in the worker, so keep `npm run worker` running while you use the UI.
@@ -233,7 +239,49 @@ That is roughly **₹675 per channel per day, about ₹20,000 per month**.
 
 ---
 
+## Launch Kit: researching and generating a new channel
+
+Open **Launch Kit**, describe the channel in one line (for example "Panchatantra animal fables for kids 4–8"), and optionally add the audience, constraints and a kids flag.
+The worker then runs these steps. Each step saves its output, so a failed step can be retried from where it stopped.
+
+1. **Research (Claude + live web search).** Looks up existing channels in the niche and what works for them, the audience, authentic cultural details,
+   visual, music and voice-acting conventions, title and thumbnail patterns, YouTube policy risks (made-for-kids, AI and reused content), and names to avoid.
+   The result is a brief with linked sources, shown in the UI.
+2. **Write the kit (Claude).** Using the brief, it produces:
+   - 5 channel name options (Roman + Devanagari + handle), a tagline, Hindi and English descriptions, keywords, and publish times;
+   - the art style prompt, negative style and content rules;
+   - the series bible: premise, world rules, character arcs, running gags, forbidden topics, open threads, and first-episode ideas;
+   - 4–6 characters with personality, speech style, catchphrases, very detailed fixed visual descriptions, and a cast voice;
+   - the narrator voice, 4–6 locations, 3 music briefs, and logo and banner art direction.
+
+   The output is validated with Zod and repaired automatically if invalid. The voice caster then checks the cast against the Sarvam catalog:
+   it fixes unknown voices and voices that don't match a character's gender or age, and gives main characters distinct voices.
+3. **Review (Claude + web search).** A second pass checks each name option for existing YouTube channels or brands, and checks the kit for originality,
+   cultural authenticity, audience fit, policy risk and production readiness. It fixes what it finds, and names with conflicts are moved to the end of the list.
+4. **Art (Nano Banana).** Three logo candidates (800×800, no text) and banner art. The channel name is added to the banner by code inside YouTube's
+   all-device safe area (2560×1440).
+5. **Music.** One instrumental track per brief: Eleven Music when `ELEVENLABS_API_KEY` is set, otherwise a placeholder. Tracks go into a music pack for the channel.
+
+On the kit page you can edit every field, preview each character's voice, pick the name and logo, and regenerate the logos, banner, music, or the whole kit from any step.
+**Create channel** then creates the theme, characters, locations, storyline bible, music pack and channel in one go. The first episode idea becomes a directive for episode 1.
+It also queues the character sheets and location plates for approval.
+The channel starts **paused**. Approve the cast in the theme, connect YouTube, use **Push to YouTube** on the channel page
+(description, keywords, banner, and "Full Episodes" / "Shorts" playlists; new uploads are added to them), upload the logo as the profile picture in
+YouTube Studio (the API can't set it), then set the channel to **Active**.
+
+You can also run a kit from the command line: `npm run launch -- "Bhoot-wala gaon spooky comedy" [--kids] [--apply]`.
+
+**Music licensing.** The bundled tracks and the offline synth are placeholders. For production, either generate with Eleven Music
+(paid ElevenLabs plans allow broad commercial use; check the Eleven Music terms for your plan), or upload tracks you've licensed on the Music page.
+A licence note is required for uploads and is stored with each track.
+
+**Cost of one kit** (estimate): research and review use about 20 web searches ($0.01 each) plus about 60k tokens on Sonnet 5.5 (≈ ₹70–110),
+4 images (≈ ₹14), and about 4.5 minutes of Eleven Music (plan-dependent; estimated at $0.8/min ≈ ₹320). Every kit's spend is logged and shown on its page.
+
 ## Adding a new channel
+
+The quickest way is the **Launch Kit** above. To set one up by hand:
+
 
 1. **Themes → New theme.** Set the genre, a detailed `art_style_prompt`, negative style, tone, audience and content rules
    (toggle the strict kids profile for children's content). Pick the narrator voice.
@@ -261,6 +309,7 @@ npm test
 
 - `test/script-schema.test.ts`: script JSON validation (fences/prose, normalisation, Devanagari, line length, unknown keys, shot bounds)
 - `test/duration.test.ts`: the shot duration rule, frame alignment, the status machine, timezone scheduling
+- `test/kit.test.ts`: launch-kit schema validation and repair parsing, kid-safety enforcement, voice casting (gender/age fit, distinct voices, clamping, v2/v3 catalogs), music moods
 - `test/assembly.test.ts`: renders a **3-shot fixture** (two locations → one crossfade, two dialogue lines + one silent shot)
   through Ken Burns + loudness normalisation + full assembly with music, SFX, subtitles, intro and outro. It checks codecs, size,
   duration, and the Shorts length cap.
@@ -268,6 +317,9 @@ npm test
 ---
 
 ## Notes & limits
+
+- Web research quality depends on what search returns. Read the sources and the review notes, and check a name on YouTube yourself before you commit to it.
+- Voice genders for some Bulbul v3 speakers (marked * in the picker) come from third-party docs. Confirm them with **Preview voice**.
 
 - Nano Banana and Sarvam produce no motion. Ken Burns is the default; lip-sync/I2V is an optional add-on behind `MotionProvider`.
 - YouTube API quota: uploads are among the most expensive Data API calls, and the default project quota is 10,000 units per day. Check the current per-call cost in Google's quota calculator; 3 uploads × N channels may need a quota increase.

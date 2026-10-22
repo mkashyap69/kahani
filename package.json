@@ -2,8 +2,13 @@
   "name": "kahani-studio",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=20" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "db:generate": "npm run db:generate -w @kahani/core",
     "db:migrate": "npm run db:migrate -w @kahani/core",
@@ -16,7 +21,8 @@
     "dev:web": "npm run dev -w @kahani/web",
     "build:web": "npm run build -w @kahani/web",
     "test": "npm run test -w @kahani/core",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "launch": "npm run launch -w @kahani/worker --"
   },
   "devDependencies": {
     "tsx": "^4.20.0",

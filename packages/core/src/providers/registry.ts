@@ -10,7 +10,8 @@ import { MockLLM } from "./mock/llm.js";
 import { MockImage, MockJudge } from "./mock/image.js";
 import { MockTTS } from "./mock/tts.js";
 import { MockPublisher } from "./mock/publisher.js";
-import type { ImageProvider, LLMProvider, MotionProvider, Publisher, TTSProvider, VisionJudge } from "./types.js";
+import { ElevenLabsMusic, MockMusic } from "./music.js";
+import type { ImageProvider, LLMProvider, MotionProvider, MusicProvider, Publisher, TTSProvider, VisionJudge } from "./types.js";
 
 async function key(name: SecretKey): Promise<string | undefined> {
   if (config.providerMode === "mock") return undefined;
@@ -39,6 +40,11 @@ export async function ttsProvider(): Promise<TTSProvider> {
   return k ? new SarvamTTS(k, config.sarvamModel) : new MockTTS();
 }
 
+export async function musicProvider(): Promise<MusicProvider> {
+  const k = await key("ELEVENLABS_API_KEY");
+  return k ? new ElevenLabsMusic(k, config.elevenMusicModel) : new MockMusic();
+}
+
 /** Per-channel motion provider: "kenburns" (default) or "lipsync" (fal.ai for close-up dialogue). */
 export async function motionProvider(channelMotion: string): Promise<MotionProvider> {
   if (channelMotion === "lipsync") {
@@ -57,6 +63,6 @@ export async function publisherFor(channelId: string): Promise<Publisher> {
 }
 
 export async function providerSummary() {
-  const [llm, img, tts] = await Promise.all([llmProvider(), imageProvider(), ttsProvider()]);
-  return { llm: `${llm.name}:${llm.model}`, image: `${img.name}:${img.model}`, tts: `${tts.name}:${tts.model}`, mode: config.providerMode };
+  const [llm, img, tts, music] = await Promise.all([llmProvider(), imageProvider(), ttsProvider(), musicProvider()]);
+  return { llm: `${llm.name}:${llm.model}`, image: `${img.name}:${img.model}`, tts: `${tts.name}:${tts.model}`, music: `${music.name}:${music.model}`, mode: config.providerMode };
 }

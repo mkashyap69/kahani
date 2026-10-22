@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  applyLaunchKit,
+  KitSchema,
+  deleteMusicTrack,
+  uploadMusicTrack,
+  type KitStep,
   approveCharacterSheet,
   approveItem,
   approveLocationReference,
@@ -289,4 +294,131 @@ export async function saveSettingsAction(form: FormData) {
     if (bool(form, `clear_${key}`)) await setSecret(key as SecretKey, null);
   }
   revalidatePath("/settings");
+}
+
+// ───────────── launch kit ─────────────
+export async function createKitAction(form: FormData) {
+  const idea = str(form, "idea");
+  if (idea.length < 5) throw new Error("describe the channel idea in a few words");
+  const kit = await prisma.launchKit.create({
+    data: { idea, language: str(form, "language") || "hi-IN", audience: str(form, "audience"), kidSafe: bool(form, "kidSafe"), notes: str(form, "notes") },
+  });
+  await enqueueStudio({ kind: "launch-kit", kitId: kit.id });
+  redirect(`/launch/${kit.id}`);
+}
+
+export async function rerunKitAction(kitId: string, from: KitStep, only = false) {
+  await prisma.launchKit.update({ where: { id: kitId }, data: { status: "QUEUED", error: null } });
+  await enqueueStudio({ kind: "launch-kit", kitId, ...(only ? { only: from } : { from }) });
+  revalidatePath(`/launch/${kitId}`);
+}
+export async function kitArtAction(kitId: string, what: "logo" | "banner") {
+  await enqueueStudio({ kind: "kit-art", kitId, what });
+  revalidatePath(`/launch/${kitId}`);
+}
+export async function kitMusicAction(kitId: string) {
+  await enqueueStudio({ kind: "kit-music", kitId });
+  revalidatePath(`/launch/${kitId}`);
+}
+export async function chooseLogoAction(kitId: string, key: string) {
+  await prisma.launchKit.update({ where: { id: kitId }, data: { logoKey: key } });
+  revalidatePath(`/launch/${kitId}`);
+}
+
+function setPath(obj: Record<string, unknown>, path: string, raw: string) {
+  const parts = path.split(".");
+  let cur: Record<string, unknown> = obj;
+  for (const p of parts.slice(0, -1)) cur = (cur[p] ??= /^\d+$/.test(p) ? [] : {}) as Record<string, unknown>;
+  const last = parts[parts.length - 1];
+  const prev = cur[last];
+  cur[last] = Array.isArray(prev)
+    ? raw
+        .split(/(keywords|catchphrases)$/.test(path) ? "," : "\n")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : typeof prev === "number"
+      ? Number(raw)
+      : raw;
+}
+
+/** Saves every edited kit field (inputs are named by JSON path, e.g. "characters.0.voice.speaker"). */
+export async function saveKitAction(form: FormData) {
+  const kitId = str(form, "kitId");
+  const k = await prisma.launchKit.findUniqueOrThrow({ where: { id: kitId } });
+  const kit = structuredClone(k.kit) as Record<string, unknown>;
+  for (const [name, value] of form.entries()) {
+    if (name.startsWith("$") || name === "kitId" || name.startsWith("bool:")) continue;
+    setPath(kit, name, String(value));
+  }
+  for (const name of form.keys()) {
+    if (!name.startsWith("bool:")) continue;
+    const path = name.slice(5);
+    const parts = path.split(".");
+    let cur = kit as Record<string, unknown>;
+    for (const p of parts.slice(0, -1)) cur = cur[p] as Record<string, unknown>;
+    cur[parts[parts.length - 1]] = form.get(path) === "on";
+  }
+  const parsed = KitSchema.safeParse(kit);
+  if (!parsed.success) throw new Error(parsed.error.issues.slice(0, 4).map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+  await prisma.launchKit.update({ where: { id: kitId }, data: { kit: parsed.data as object, chosenName: num(form, "$chosenName", k.chosenName) } });
+  revalidatePath(`/launch/${kitId}`);
+}
+
+export async function applyKitAction(kitId: string) {
+  const res = await applyLaunchKit(kitId);
+  // candidate sheets / plates go to Character Studio for approval
+  for (const id of res.characterIds) {
+    await prisma.character.update({ where: { id }, data: { sheetStatus: "GENERATING" } });
+    await enqueueStudio({ kind: "character-sheet", characterId: id });
+  }
+  for (const id of res.locationIds) await enqueueStudio({ kind: "location-ref", locationId: id });
+  await enqueueStudio({ kind: "sync-schedules" }).catch(() => undefined);
+  revalidatePath("/channels");
+  redirect(`/channels/${res.channelId}?launched=1`);
+}
+
+export async function deleteKitAction(kitId: string) {
+  await prisma.launchKit.delete({ where: { id: kitId } });
+  revalidatePath("/launch");
+  redirect("/launch");
+}
+
+export async function pushBrandingAction(channelId: string) {
+  await enqueueStudio({ kind: "youtube-branding", channelId });
+  revalidatePath(`/channels/${channelId}`);
+}
+
+export async function setChannelLogoAction(form: FormData) {
+  const channelId = str(form, "channelId");
+  for (const kind of ["logo", "banner"] as const) {
+    const file = form.get(kind);
+    if (file && typeof file === "object" && "arrayBuffer" in file && file.size > 0) {
+      const key = `channels/${channelId}/${kind}-${Date.now().toString(36)}${kind === "logo" ? ".png" : ".jpg"}`;
+      await storage().put(key, Buffer.from(await file.arrayBuffer()));
+      await prisma.channel.update({ where: { id: channelId }, data: { [`${kind}Key`]: key } });
+    }
+  }
+  const description = form.get("description");
+  if (typeof description === "string") await prisma.channel.update({ where: { id: channelId }, data: { description: description.trim(), keywords: str(form, "keywords").split(",").map((k) => k.trim()).filter(Boolean) } });
+  revalidatePath(`/channels/${channelId}`);
+}
+
+// ───────────── music ─────────────
+export async function uploadMusicAction(form: FormData) {
+  const file = form.get("file");
+  if (!file || typeof file !== "object" || !("arrayBuffer" in file) || file.size === 0) throw new Error("choose an audio file");
+  const license = str(form, "license");
+  if (!license) throw new Error("record where the licence comes from (e.g. 'Epidemic Sound subscription, track ID …')");
+  await uploadMusicTrack({ pack: str(form, "pack"), title: str(form, "title") || file.name, license, data: Buffer.from(await file.arrayBuffer()), filename: file.name });
+  revalidatePath("/music");
+}
+export async function generateMusicAction(form: FormData) {
+  const prompt = str(form, "prompt");
+  if (prompt.length < 10) throw new Error("describe the music (instruments, tempo, mood)");
+  await enqueueStudio({ kind: "music-generate", pack: str(form, "pack") || "custom", title: str(form, "title") || "Untitled", prompt, lengthSec: num(form, "lengthSec", 90), mood: str(form, "mood") || undefined });
+  revalidatePath("/music");
+}
+export async function deleteMusicAction(id: string) {
+  await deleteMusicTrack(id);
+  revalidatePath("/music");
 }

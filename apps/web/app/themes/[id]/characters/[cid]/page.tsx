@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
-import { prisma, SARVAM_VOICES } from "@kahani/core";
+import { prisma, voiceCatalog } from "@kahani/core";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -81,7 +81,7 @@ export default async function CharacterStudio({ params }: { params: Promise<{ id
           <CardContent className="space-y-4">
             <Field label="Speaker">
               <Select name="voiceSpeaker" defaultValue={c?.voiceSpeaker ?? "anushka"}>
-                {SARVAM_VOICES.map((v) => (
+                {voiceCatalog().map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.label}
                   </option>

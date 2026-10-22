@@ -77,6 +77,15 @@ model Channel {
   /// Story target length in minutes (8–15)
   storyTargetMinutes Int        @default(10)
 
+  // branding (from the launch kit or uploaded)
+  logoKey          String?
+  bannerKey        String?
+  description      String   @default("")
+  keywords         String[] @default([])
+  storyPlaylistId  String?
+  shortsPlaylistId String?
+  launchKit        LaunchKit?
+
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   content   ContentItem[]
@@ -292,6 +301,8 @@ model ApiCallLog {
   characters    Int          @default(0)
   images        Int          @default(0)
   seconds       Float        @default(0)
+  searches      Int          @default(0)
+  launchKitId   String?
   costInr       Float        @default(0)
   success       Boolean      @default(true)
   error         String?
@@ -316,4 +327,61 @@ model Setting {
   value     String
   isSecret  Boolean  @default(false)
   updatedAt DateTime @updatedAt
+}
+
+enum KitStatus {
+  QUEUED
+  RESEARCHING
+  WRITING
+  REVIEWING
+  ART
+  MUSIC
+  READY
+  APPLIED
+  FAILED
+}
+
+/// "Channel launch kit": research → series concept, cast, voices, locations, branding and music.
+model LaunchKit {
+  id             String    @id @default(cuid())
+  idea           String
+  language       String    @default("hi-IN")
+  audience       String    @default("")
+  kidSafe        Boolean   @default(false)
+  notes          String    @default("")
+  status         KitStatus @default(QUEUED)
+  failedStep     KitStatus?
+  error          String?
+  /// research brief (with sources) from the web-search step
+  research       Json?
+  /// generated kit (validated KitSchema), editable in the UI
+  kit            Json?
+  /// critique notes from the review pass
+  review         Json?
+  logoCandidates String[]  @default([])
+  logoKey        String?
+  bannerKey      String?
+  chosenName     Int       @default(0)
+  costInr        Float     @default(0)
+  channelId      String?   @unique
+  channel        Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// Background music. Packs are either folders under assets/music or rows here (generated or uploaded licensed tracks).
+model MusicTrack {
+  id          String   @id @default(cuid())
+  pack        String
+  title       String
+  mood        String   @default("")
+  prompt      String   @default("")
+  key         String
+  durationSec Float    @default(0)
+  /// "elevenlabs" | "mock" | "upload"
+  source      String
+  license     String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([pack])
 }

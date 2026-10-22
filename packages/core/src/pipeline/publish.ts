@@ -41,6 +41,7 @@ export async function runPublishStage(itemId: string): Promise<void> {
       madeForKids: item.channel.madeForKids,
       containsSyntheticMedia: true,
       language: item.channel.language,
+      playlistId: item.type === "STORY" ? item.channel.storyPlaylistId : item.channel.shortsPlaylistId,
       resumeSession: meta.uploadSession ?? null,
       onSession: async (uri) => {
         await prisma.contentItem.update({ where: { id: itemId }, data: { youtubeMeta: { ...meta, uploadSession: uri } as unknown as Prisma.InputJsonValue } });

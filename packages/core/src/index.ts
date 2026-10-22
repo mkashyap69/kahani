@@ -29,3 +29,7 @@ export * from "./pipeline/actions.js";
 export * from "./pipeline/references.js";
 export * from "./pipeline/memory.js";
 export * from "./seed.js";
+export * from "./domain/kit.js";
+export * from "./pipeline/launch.js";
+export * from "./pipeline/music.js";
+export { SARVAM_V3_VOICES, voiceCatalog, castVoices, type VoiceInfo } from "./providers/sarvam.js";

@@ -44,8 +44,9 @@ function character(key: string, x: number, groundY: number, scale: number, emoti
 
 /** Renders flat 2D "cartoon" placeholder frames (no API) so the pipeline and motion are visible offline. */
 export function renderMockFrame(req: ImageRequest): Promise<Buffer> {
-  const [W, H] = req.aspect === "9:16" ? [1080, 1920] : [1920, 1080];
+  const [W, H] = req.aspect === "9:16" ? [1080, 1920] : req.aspect === "1:1" ? [1024, 1024] : [1920, 1080];
   const m = req.meta ?? {};
+  if (m.kind === "logo") return renderMockLogo(W, m);
   const time = /night/.test(req.prompt) ? "night" : /evening/.test(req.prompt) ? "evening" : /dawn/.test(req.prompt) ? "dawn" : "day";
   const [sky1, sky2] = SKY[time];
   const loc = m.location ?? "village";
@@ -63,9 +64,12 @@ export function renderMockFrame(req: ImageRequest): Promise<Buffer> {
       : `<g><rect x="${px - 120}" y="${groundY - 200}" width="240" height="200" fill="#ffcc80" stroke="#1b1b1b" stroke-width="6"/><polygon points="${px - 150},${groundY - 200} ${px},${groundY - 320} ${px + 150},${groundY - 200}" fill="#d84315" stroke="#1b1b1b" stroke-width="6"/></g>`;
   }).join("");
   const sheet = m.kind === "sheet";
+  const banner = m.kind === "banner";
   const figures = sheet
     ? [0.2, 0.5, 0.8].map((f, i) => character(chars[0] ?? "hero", W * f, groundY, i === 2 ? 1.25 : 1, ["happy", "surprised", "neutral"][i])).join("")
-    : chars.map((k, i) => character(k, spacing * (i + 1), close ? H * 1.05 : groundY, scale, m.emotion ?? "neutral")).join("");
+    : banner
+      ? chars.map((k, i) => character(k, i % 2 ? W - 160 - Math.floor(i / 2) * 170 : 160 + Math.floor(i / 2) * 170, groundY, 1, "happy")).join("")
+      : chars.map((k, i) => character(k, spacing * (i + 1), close ? H * 1.05 : groundY, scale, m.emotion ?? "neutral")).join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky1}"/><stop offset="1" stop-color="${sky2}"/></linearGradient></defs>
     <rect width="${W}" height="${H}" fill="url(#sky)"/>
@@ -79,12 +83,23 @@ export function renderMockFrame(req: ImageRequest): Promise<Buffer> {
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+function renderMockLogo(W: number, m: NonNullable<ImageRequest["meta"]>): Promise<Buffer> {
+  const key = m.characters?.[0] ?? m.title ?? "logo";
+  const bg = PALETTE[h(key + (m.title ?? "")) % PALETTE.length];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${W}">
+    <rect width="${W}" height="${W}" fill="${bg}"/>
+    <circle cx="${W / 2}" cy="${W / 2}" r="${W * 0.42}" fill="#fff7e0" stroke="#1b1b1b" stroke-width="24"/>
+    ${character(key, W / 2, W * 1.02, 2.4, "happy")}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 export class MockImage implements ImageProvider {
   readonly name = "mock-image";
   readonly model = "mock";
   async generate(req: ImageRequest, ctx: CallContext) {
     const data = await renderMockFrame(req);
-    await logApiCall({ contentItemId: ctx.contentItemId, provider: this.name, model: this.model, operation: ctx.operation ?? "image", images: 1 });
+    await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: this.name, model: this.model, operation: ctx.operation ?? "image", images: 1 });
     return { data, mime: "image/png" };
   }
 }

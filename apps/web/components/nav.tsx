@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Inbox, LayoutDashboard, Palette, Settings, Tv, ListVideo } from "lucide-react";
+import { Clapperboard, Inbox, LayoutDashboard, Palette, Settings, Tv, ListVideo, Rocket, Music } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/review", label: "Review Queue", icon: Inbox },
   { href: "/content", label: "All Content", icon: ListVideo },
+  { href: "/launch", label: "Launch Kit", icon: Rocket },
   { href: "/channels", label: "Channels", icon: Tv },
   { href: "/themes", label: "Themes", icon: Palette },
+  { href: "/music", label: "Music", icon: Music },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

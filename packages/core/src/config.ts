@@ -52,6 +52,9 @@ export const config = {
   get sarvamModel() {
     return process.env.SARVAM_TTS_MODEL ?? "bulbul:v2";
   },
+  get elevenMusicModel() {
+    return process.env.ELEVENLABS_MUSIC_MODEL ?? "music_v1";
+  },
   get falLipsyncModel() {
     return process.env.FAL_LIPSYNC_MODEL ?? "veed/fabric-1.0";
   },

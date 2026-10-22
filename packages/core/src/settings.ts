@@ -7,6 +7,7 @@ export const SECRET_KEYS = [
   "GEMINI_API_KEY",
   "SARVAM_API_KEY",
   "FAL_KEY",
+  "ELEVENLABS_API_KEY",
   "YOUTUBE_CLIENT_ID",
   "YOUTUBE_CLIENT_SECRET",
 ] as const;

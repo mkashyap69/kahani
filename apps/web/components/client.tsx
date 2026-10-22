@@ -59,7 +59,22 @@ export function ActionButton({ action, confirm, children, ...props }: ButtonProp
 }
 
 /** Inline audio preview for a voice configuration. */
-export function VoicePreview({ speaker, pitch, pace, loudness, defaultText }: { speaker: string; pitch: number; pace: number; loudness: number; defaultText: string }) {
+export function VoicePreview({
+  speaker,
+  pitch,
+  pace,
+  loudness,
+  defaultText,
+  fields = { speaker: "voiceSpeaker", pitch: "voicePitch", pace: "voicePace", loudness: "voiceLoudness" },
+}: {
+  speaker: string;
+  pitch: number;
+  pace: number;
+  loudness: number;
+  defaultText: string;
+  /** form field names to read live (unsaved) values from */
+  fields?: { speaker: string; pitch: string; pace: string; loudness: string };
+}) {
   const [text, setText] = useState(defaultText);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "error">("idle");
   const [err, setErr] = useState("");
@@ -75,7 +90,7 @@ export function VoicePreview({ speaker, pitch, pace, loudness, defaultText }: { 
       const res = await fetch("/api/voice-preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, speaker: get("voiceSpeaker", speaker), pitch: Number(get("voicePitch", pitch)), pace: Number(get("voicePace", pace)), loudness: Number(get("voiceLoudness", loudness)) }),
+        body: JSON.stringify({ text, speaker: get(fields.speaker, speaker), pitch: Number(get(fields.pitch, pitch)), pace: Number(get(fields.pace, pace)), loudness: Number(get(fields.loudness, loudness)) }),
       });
       if (!res.ok) throw new Error(await res.text());
       const url = URL.createObjectURL(await res.blob());

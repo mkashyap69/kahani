@@ -24,10 +24,15 @@ export const PRICING = {
   sarvamInrPer10kChars: 15,
   /** fal.ai lip-sync — USD per output second */
   falLipsyncUsdPerSec: 0.08,
+  /** Anthropic server-side web search — USD per search */
+  webSearchUsd: 0.01,
+  /** ElevenLabs music — USD per generated minute (estimate; plan-dependent) */
+  elevenMusicUsdPerMin: 0.8,
 };
 
 export interface UsageRecord {
   contentItemId?: string | null;
+  launchKitId?: string | null;
   provider: string;
   model: string;
   operation: string;
@@ -36,6 +41,7 @@ export interface UsageRecord {
   characters?: number;
   images?: number;
   seconds?: number;
+  searches?: number;
   success?: boolean;
   error?: string;
   /** override computed cost */
@@ -48,7 +54,7 @@ export function estimateCostInr(u: UsageRecord): number {
   switch (u.provider) {
     case "anthropic": {
       const [i, o] = PRICING.anthropic[u.model] ?? PRICING.anthropic["claude-sonnet-5-5"];
-      return (((u.inputTokens ?? 0) * i + (u.outputTokens ?? 0) * o) / 1e6) * fx;
+      return (((u.inputTokens ?? 0) * i + (u.outputTokens ?? 0) * o) / 1e6) * fx + (u.searches ?? 0) * PRICING.webSearchUsd * fx;
     }
     case "gemini": {
       const [i, o] = PRICING.gemini.textPerMTok;
@@ -59,6 +65,8 @@ export function estimateCostInr(u: UsageRecord): number {
       return ((u.characters ?? 0) / 10_000) * PRICING.sarvamInrPer10kChars;
     case "fal":
       return (u.seconds ?? 0) * PRICING.falLipsyncUsdPerSec * fx;
+    case "elevenlabs":
+      return ((u.seconds ?? 0) / 60) * PRICING.elevenMusicUsdPerMin * fx;
     default:
       return 0;
   }
@@ -71,6 +79,7 @@ export async function logApiCall(u: UsageRecord): Promise<number> {
     await prisma.apiCallLog.create({
       data: {
         contentItemId: u.contentItemId ?? null,
+        launchKitId: u.launchKitId ?? null,
         provider: u.provider,
         model: u.model,
         operation: u.operation,
@@ -79,6 +88,7 @@ export async function logApiCall(u: UsageRecord): Promise<number> {
         characters: u.characters ?? 0,
         images: u.images ?? 0,
         seconds: u.seconds ?? 0,
+        searches: u.searches ?? 0,
         costInr,
         success: u.success ?? true,
         error: u.error?.slice(0, 2000),
@@ -86,6 +96,9 @@ export async function logApiCall(u: UsageRecord): Promise<number> {
     });
     if (u.contentItemId && costInr > 0) {
       await prisma.contentItem.update({ where: { id: u.contentItemId }, data: { costInr: { increment: costInr } } });
+    }
+    if (u.launchKitId && costInr > 0) {
+      await prisma.launchKit.update({ where: { id: u.launchKitId }, data: { costInr: { increment: costInr } } });
     }
   } catch (err) {
     console.warn("[cost] failed to log api call", err);

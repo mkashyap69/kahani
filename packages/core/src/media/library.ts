@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config.js";
 import { hashOf } from "../util/crypto.js";
+import { prisma } from "../db.js";
+import { storage } from "../storage/index.js";
 
 export interface SfxEntry {
   file: string;
@@ -43,8 +45,25 @@ export function matchSfx(query: string | null | undefined, library: SfxEntry[]):
 
 export const sfxPath = (e: SfxEntry) => path.join(config.assetsDir, "sfx", e.file);
 
-/** Deterministically pick a background track from the channel's music pack. */
+/**
+ * Deterministically pick a background track from the channel's music pack.
+ * Packs live either in the database (generated / uploaded licensed tracks) or as folders under assets/music.
+ */
 export async function pickMusic(pack: string, seed: string): Promise<string | null> {
+  const tracks = await prisma.musicTrack.findMany({ where: { pack }, orderBy: { createdAt: "asc" } }).catch(() => []);
+  if (tracks.length) {
+    const t = tracks[parseInt(hashOf(seed).slice(0, 8), 16) % tracks.length];
+    const local = path.join(config.workDir, "_music", t.key.replace(/[\\/]/g, "_"));
+    try {
+      await fs.access(local);
+      return local;
+    } catch {
+      const tmp = `${local}.${process.pid}-${Date.now().toString(36)}.tmp`;
+      await storage().download(t.key, tmp);
+      await fs.rename(tmp, local);
+      return local;
+    }
+  }
   const dir = path.join(config.assetsDir, "music", pack);
   try {
     const files = (await fs.readdir(dir)).filter((f) => /\.(wav|mp3|m4a|ogg|flac)$/i.test(f)).sort();
@@ -56,9 +75,12 @@ export async function pickMusic(pack: string, seed: string): Promise<string | nu
 }
 
 export async function musicPacks(): Promise<string[]> {
+  let folders: string[] = [];
   try {
-    return (await fs.readdir(path.join(config.assetsDir, "music"), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+    folders = (await fs.readdir(path.join(config.assetsDir, "music"), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
   } catch {
-    return [];
+    folders = [];
   }
+  const db = await prisma.musicTrack.findMany({ distinct: ["pack"], select: { pack: true } }).catch(() => []);
+  return [...new Set([...db.map((d) => d.pack), ...folders])].sort();
 }

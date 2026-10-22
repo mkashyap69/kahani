@@ -7,7 +7,8 @@
     "start": "dotenv -e ../../.env -- tsx src/index.ts",
     "scheduler": "dotenv -e ../../.env -- tsx src/scheduler.ts",
     "demo": "dotenv -e ../../.env -- tsx src/demo.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "launch": "dotenv -e ../../.env -- tsx src/launch.ts"
   },
   "dependencies": {
     "@kahani/core": "*",

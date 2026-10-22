@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   GEMINI_API_KEY: "Google Gemini (Nano Banana images + vision check)",
   SARVAM_API_KEY: "Sarvam AI (Bulbul TTS)",
   FAL_KEY: "fal.ai (optional lip-sync)",
+  ELEVENLABS_API_KEY: "ElevenLabs (Eleven Music — background music generation)",
   YOUTUBE_CLIENT_ID: "YouTube OAuth client ID",
   YOUTUBE_CLIENT_SECRET: "YouTube OAuth client secret",
 };

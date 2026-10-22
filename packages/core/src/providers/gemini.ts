@@ -43,7 +43,7 @@ export class GeminiImage implements ImageProvider {
         { retries: 4, baseMs: 2000 },
       );
       await logApiCall({
-        contentItemId: ctx.contentItemId,
+        contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId,
         provider: this.name,
         model: this.model,
         operation: ctx.operation ?? "image",
@@ -52,7 +52,7 @@ export class GeminiImage implements ImageProvider {
       });
       return { data: Buffer.from(result.img.data!, "base64"), mime: result.img.mimeType ?? "image/png" };
     } catch (err) {
-      await logApiCall({ contentItemId: ctx.contentItemId, provider: this.name, model: this.model, operation: ctx.operation ?? "image", success: false, error: String(err) });
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: this.name, model: this.model, operation: ctx.operation ?? "image", success: false, error: String(err) });
       throw err;
     }
   }
@@ -83,7 +83,7 @@ export class GeminiJudge implements VisionJudge {
       this.ai.models.generateContent({ model: this.model, contents: [{ role: "user", parts }], config: { responseMimeType: "application/json" } }),
     );
     await logApiCall({
-      contentItemId: ctx.contentItemId,
+      contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId,
       provider: "gemini",
       model: this.model,
       operation: "consistency-check",

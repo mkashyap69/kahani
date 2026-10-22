@@ -1,5 +1,5 @@
 import type { Theme } from "@kahani/core";
-import { SARVAM_VOICES } from "@kahani/core";
+import { voiceCatalog } from "@kahani/core";
 import { Field, Input, Select, Switch, Textarea } from "@/components/ui/input";
 import { SubmitButton } from "@/components/client";
 import { saveThemeAction } from "@/app/actions";
@@ -39,7 +39,7 @@ export function ThemeForm({ theme }: { theme?: Theme | null }) {
         <legend className="px-1 text-sm font-medium">Narrator voice</legend>
         <Field label="Speaker">
           <Select name="narratorSpeaker" defaultValue={t?.narratorSpeaker ?? "vidya"}>
-            {SARVAM_VOICES.map((v) => (
+            {voiceCatalog().map((v) => (
               <option key={v.id} value={v.id}>
                 {v.label}
               </option>

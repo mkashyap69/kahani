@@ -1,4 +1,5 @@
 import { logApiCall } from "../../cost.js";
+import { mockKit, mockResearch, mockReview } from "./kit.js";
 import type { CallContext, LLMProvider, LLMRequest, LLMResponse } from "../types.js";
 
 /** Natural spoken-Hindi line bank used by the offline mock writer. */
@@ -124,12 +125,15 @@ export class MockLLM implements LLMProvider {
     const prompt = req.messages.map((m) => m.content).join("\n");
     let out: unknown;
     if (req.system.includes("content-safety reviewer")) out = { safe: true, severity: "none", issues: [] };
+    else if (req.system.includes("YouTube strategist and researcher")) out = mockResearch(prompt);
+    else if (req.system.includes("creator and showrunner")) out = mockKit(prompt);
+    else if (req.system.includes("development executive")) out = mockReview(prompt);
     else if (req.system.includes("'story so far'")) {
       const mem = prompt.match(/Current memory:\n([\s\S]*?)\n\nOpen threads/)?.[1] ?? "";
       out = { story_memory: mem.slice(-4000), open_threads: [] };
     } else out = mockScriptFromPrompt(req.messages[0]?.content ?? prompt);
     const text = JSON.stringify(out);
-    await logApiCall({ contentItemId: ctx.contentItemId, provider: this.name, model: this.model, operation: ctx.operation ?? "llm", inputTokens: Math.ceil(prompt.length / 4), outputTokens: Math.ceil(text.length / 4) });
+    await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: this.name, model: this.model, operation: ctx.operation ?? "llm", inputTokens: Math.ceil(prompt.length / 4), outputTokens: Math.ceil(text.length / 4) });
     return { text, inputTokens: 0, outputTokens: 0, stopReason: "end_turn" };
   }
 }

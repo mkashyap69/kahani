@@ -16,7 +16,12 @@ export type StudioJob =
   | { kind: "location-ref"; locationId: string }
   | { kind: "style-test"; themeId: string }
   | { kind: "daily-run"; channelId: string; force?: boolean }
-  | { kind: "sync-schedules" };
+  | { kind: "sync-schedules" }
+  | { kind: "launch-kit"; kitId: string; from?: string; only?: string }
+  | { kind: "kit-art"; kitId: string; what: "logo" | "banner" }
+  | { kind: "kit-music"; kitId: string }
+  | { kind: "music-generate"; pack: string; title: string; prompt: string; lengthSec: number; mood?: string }
+  | { kind: "youtube-branding"; channelId: string };
 
 let connection: Redis | undefined;
 let producer: Redis | undefined;
@@ -60,7 +65,21 @@ export async function enqueueStage(itemId: string, stage: Stage, delayMs = 0) {
 
 export async function enqueueStudio(job: StudioJob) {
   const id =
-    job.kind === "character-sheet" ? job.characterId : job.kind === "location-ref" ? job.locationId : job.kind === "style-test" ? job.themeId : job.kind === "daily-run" ? job.channelId : "all";
+    job.kind === "character-sheet"
+      ? job.characterId
+      : job.kind === "location-ref"
+        ? job.locationId
+        : job.kind === "style-test"
+          ? job.themeId
+          : job.kind === "daily-run" || job.kind === "youtube-branding"
+            ? job.channelId
+            : job.kind === "launch-kit" || job.kind === "kit-music"
+              ? job.kitId
+              : job.kind === "kit-art"
+                ? `${job.kitId}-${job.what}`
+                : job.kind === "music-generate"
+                  ? `${job.pack}-${Date.now().toString(36)}`
+                  : "all";
   const q = queue(STUDIO_QUEUE);
   const jobId = `${job.kind}__${id}`;
   const existing = await q.getJob(jobId);

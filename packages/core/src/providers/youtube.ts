@@ -12,6 +12,8 @@ import type { CallContext, PublishRequest, Publisher } from "./types.js";
 export const YOUTUBE_SCOPES = [
   "https://www.googleapis.com/auth/youtube.upload",
   "https://www.googleapis.com/auth/youtube.readonly",
+  // channel branding (description, keywords, banner) and playlists
+  "https://www.googleapis.com/auth/youtube",
 ];
 
 export async function oauthClient() {
@@ -144,7 +146,15 @@ export class YouTubePublisher implements Publisher {
         console.warn(`[youtube] thumbnail upload failed: ${err}`);
       }
     }
-    await logApiCall({ contentItemId: ctx.contentItemId, provider: "youtube", model: "data-api-v3", operation: "upload", costInr: 0 });
+    if (req.playlistId) {
+      try {
+        const yt = google.youtube({ version: "v3", auth });
+        await yt.playlistItems.insert({ part: ["snippet"], requestBody: { snippet: { playlistId: req.playlistId, resourceId: { kind: "youtube#video", videoId: video.id } } } });
+      } catch (err) {
+        console.warn(`[youtube] adding to playlist failed: ${err}`);
+      }
+    }
+    await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "youtube", model: "data-api-v3", operation: "upload", costInr: 0 });
     return { videoId: video.id, url: `https://youtu.be/${video.id}` };
   }
 
@@ -167,4 +177,50 @@ async function readRange(file: string, start: number, end: number): Promise<Buff
   } finally {
     await fh.close();
   }
+}
+
+/**
+ * Push launch-kit branding to the connected YouTube channel: description, keywords, banner image,
+ * and "Full episodes" / "Shorts" playlists. (The profile picture cannot be set through the API — upload the logo in YouTube Studio.)
+ */
+export async function pushYoutubeBranding(channelId: string, opts: { bannerPath?: string | null }): Promise<{ updated: string[] }> {
+  const channel = await prisma.channel.findUniqueOrThrow({ where: { id: channelId } });
+  const auth = await authedClient(channelId);
+  const yt = google.youtube({ version: "v3", auth });
+  const updated: string[] = [];
+  const me = await yt.channels.list({ part: ["brandingSettings", "id"], mine: true });
+  const current = me.data.items?.[0];
+  if (!current?.id) throw new NonRetryableError("no YouTube channel found for this account");
+
+  let bannerUrl: string | undefined;
+  if (opts.bannerPath) {
+    const res = await yt.channelBanners.insert({ media: { mimeType: "image/jpeg", body: fs.createReadStream(opts.bannerPath) } });
+    bannerUrl = res.data.url ?? undefined;
+  }
+  const keywords = channel.keywords.map((k) => (k.includes(" ") ? `"${k}"` : k)).join(" ").slice(0, 500);
+  const branding = current.brandingSettings ?? {};
+  await yt.channels.update({
+    part: ["brandingSettings"],
+    requestBody: {
+      id: current.id,
+      brandingSettings: {
+        ...branding,
+        channel: { ...branding.channel, description: channel.description || branding.channel?.description, keywords: keywords || branding.channel?.keywords, defaultLanguage: channel.language.split("-")[0] },
+        ...(bannerUrl ? { image: { ...branding.image, bannerExternalUrl: bannerUrl } } : {}),
+      },
+    },
+  });
+  updated.push("description", "keywords");
+  if (bannerUrl) updated.push("banner");
+
+  const ensurePlaylist = async (existing: string | null, title: string, description: string) => {
+    if (existing) return existing;
+    const res = await yt.playlists.insert({ part: ["snippet", "status"], requestBody: { snippet: { title, description }, status: { privacyStatus: "public" } } });
+    updated.push(`playlist "${title}"`);
+    return res.data.id ?? null;
+  };
+  const storyPlaylistId = await ensurePlaylist(channel.storyPlaylistId, "पूरी कहानियाँ | Full Episodes", `${channel.name} — full story episodes`);
+  const shortsPlaylistId = await ensurePlaylist(channel.shortsPlaylistId, "Shorts", `${channel.name} — Shorts`);
+  await prisma.channel.update({ where: { id: channelId }, data: { storyPlaylistId, shortsPlaylistId } });
+  return { updated };
 }

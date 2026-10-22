@@ -17,9 +17,15 @@ import {
   logger,
   prisma,
   providerSummary,
+  pushChannelBranding,
+  regenerateKitArt,
+  regenerateKitMusic,
+  generateMusicTrack,
+  runLaunchKit,
   runStage,
   runStyleTest,
   syncSchedules,
+  type KitStep,
   type StageJob,
   type StudioJob,
 } from "@kahani/core";
@@ -60,6 +66,16 @@ async function main() {
           return runStyleTest(d.themeId);
         case "sync-schedules":
           return syncSchedules();
+        case "launch-kit":
+          return runLaunchKit(d.kitId, { from: d.from as KitStep | undefined, only: d.only as KitStep | undefined });
+        case "kit-art":
+          return regenerateKitArt(d.kitId, d.what);
+        case "kit-music":
+          return regenerateKitMusic(d.kitId);
+        case "music-generate":
+          return generateMusicTrack(d);
+        case "youtube-branding":
+          return pushChannelBranding(d.channelId);
         case "daily-run": {
           const run = await createDailyRun(d.channelId, { force: d.force });
           for (const j of run.jobs) await enqueueStage(j.itemId, j.stage);

@@ -1,12 +1,12 @@
 import { encodeWav } from "../../media/wav.js";
 import { estimateSpeechSeconds } from "../../domain/duration.js";
 import { logApiCall } from "../../cost.js";
-import { SARVAM_VOICES } from "../sarvam.js";
+import { SARVAM_V3_VOICES, SARVAM_VOICES, voiceCatalog } from "../sarvam.js";
 import type { CallContext, TTSProvider, TTSRequest } from "../types.js";
 
 /** Synthesises a "babble" voice (pitch per speaker, syllable rhythm) so timing behaves like real speech. */
 export function synthBabble(req: TTSRequest, sampleRate = 24000): Buffer {
-  const female = SARVAM_VOICES.find((v) => v.id === req.speaker)?.gender !== "male";
+  const female = [...SARVAM_VOICES, ...SARVAM_V3_VOICES].find((v) => v.id === req.speaker)?.gender !== "male";
   const base = (female ? 210 : 120) * Math.pow(2, req.pitch * 0.5);
   const seconds = Math.max(0.6, estimateSpeechSeconds(req.text, req.pace));
   const n = Math.round(seconds * sampleRate);
@@ -29,10 +29,10 @@ export class MockTTS implements TTSProvider {
   readonly name = "mock-tts";
   readonly model = "mock";
   voices() {
-    return SARVAM_VOICES;
+    return voiceCatalog();
   }
   async synthesize(req: TTSRequest, ctx: CallContext) {
-    await logApiCall({ contentItemId: ctx.contentItemId, provider: this.name, model: this.model, operation: ctx.operation ?? "tts", characters: req.text.length });
+    await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: this.name, model: this.model, operation: ctx.operation ?? "tts", characters: req.text.length });
     return synthBabble(req);
   }
 }

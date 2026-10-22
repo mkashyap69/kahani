@@ -139,9 +139,9 @@ export class FalLipSyncProvider implements MotionProvider {
         ...x264Args({ fps: req.fps, bitrateK: 0, intermediate: true }),
         req.outPath,
       ]);
-      await logApiCall({ contentItemId: ctx.contentItemId, provider: "fal", model: this.model, operation: "lipsync", seconds: srcDur });
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.model, operation: "lipsync", seconds: srcDur });
     } catch (err) {
-      await logApiCall({ contentItemId: ctx.contentItemId, provider: "fal", model: this.model, operation: "lipsync", success: false, error: String(err) });
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.model, operation: "lipsync", success: false, error: String(err) });
       // never fail an episode because the optional add-on failed
       console.warn(`[motion] lip-sync failed, falling back to Ken Burns: ${err}`);
       await this.fallback.animate(req, ctx);

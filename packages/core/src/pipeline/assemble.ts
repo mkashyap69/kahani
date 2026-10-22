@@ -36,8 +36,9 @@ export async function runAssembleStage(itemId: string): Promise<void> {
   const ch = item.channel;
   const isShort = item.type === "SHORT";
   // Shorts open directly on the hook (no intro) and get a 2s end card only.
-  const intro = isShort ? null : ch.introClipKey ? await localCopy(itemId, ch.introClipKey) : await defaultCard("intro", ch.name, targets.width, targets.height, targets.fps);
-  const outro = ch.outroClipKey && !isShort ? await localCopy(itemId, ch.outroClipKey) : await defaultCard("outro", ch.name, targets.width, targets.height, targets.fps);
+  const logo = ch.logoKey ? await localCopy(itemId, ch.logoKey) : null;
+  const intro = isShort ? null : ch.introClipKey ? await localCopy(itemId, ch.introClipKey) : await defaultCard("intro", ch.name, targets.width, targets.height, targets.fps, logo);
+  const outro = ch.outroClipKey && !isShort ? await localCopy(itemId, ch.outroClipKey) : await defaultCard("outro", ch.name, targets.width, targets.height, targets.fps, logo);
   const outPath = path.join(dir, `${item.type.toLowerCase()}-${itemId}.mp4`);
 
   const result = await assembleVideo({
