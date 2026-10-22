@@ -397,6 +397,8 @@ model MusicTrack {
 /// Side-by-side image model test on the same shots.
 model ImageComparison {
   id            String   @id @default(cuid())
+  /// "image" (still models) or "video" (image-to-video models)
+  kind          String   @default("image")
   contentItemId String
   shotIdxs      Int[]
   models        String[]

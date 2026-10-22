@@ -5,9 +5,13 @@
 export interface ImageModelInfo {
   id: string;
   label: string;
-  provider: "gemini" | "fal";
-  /** standard price per image */
+  provider: "gemini" | "fal" | "byteplus";
+  /** standard price per image (output) */
   usd: number;
+  /** extra price per reference image (models billed per input megapixel) */
+  usdPerRef?: number;
+  /** BytePlus model id */
+  model?: string;
   /** batch price per image (Gemini Batch API only) */
   batchUsd?: number;
   /** fal endpoints: with reference images (edit) and without (text-to-image) */
@@ -52,8 +56,9 @@ export const IMAGE_MODELS: ImageModelInfo[] = [
     id: "fal:flux-2-pro",
     label: "FLUX.2 [pro] (via fal)",
     provider: "fal",
-    // $0.03 first output MP + $0.015 per extra input/output MP → ~0.06 with 2 refs
-    usd: 0.06,
+    // $0.03 first output MP + $0.015 per extra input MP (references are resized to ~1 MP)
+    usd: 0.03,
+    usdPerRef: 0.015,
     falEdit: "fal-ai/flux-2-pro/edit",
     falText: "fal-ai/flux-2-pro",
     maxRefs: 4,
@@ -92,6 +97,47 @@ export const IMAGE_MODELS: ImageModelInfo[] = [
     sizeParam: "image_size",
     notes: "small and cheap — test on wides/backgrounds; consistency unproven",
   },
+  {
+    id: "fal:flux-2-klein-4b",
+    label: "FLUX.2 [klein] 4B (via fal)",
+    provider: "fal",
+    // ~$0.005 per megapixel of output AND input (references resized to ~1 MP)
+    usd: 0.005,
+    usdPerRef: 0.005,
+    falEdit: "fal-ai/flux-2/klein/4b/edit",
+    falText: "fal-ai/flux-2/klein/4b",
+    maxRefs: 4,
+    sizeParam: "image_size",
+    notes: "very cheap, Apache-2.0; small model — check characters stay on-model",
+  },
+  {
+    id: "fal:z-image-turbo",
+    label: "Z-Image Turbo (via fal) — shots without characters only",
+    provider: "fal",
+    usd: 0.005, // ~$0.005 per megapixel
+    falText: "fal-ai/z-image/turbo",
+    maxRefs: 0,
+    sizeParam: "image_size",
+    notes: "text-to-image only (no reference sheets) — for establishing shots / empty scenes",
+  },
+  {
+    id: "byteplus:seedream-4.0",
+    label: "Seedream 4.0 (BytePlus ModelArk)",
+    provider: "byteplus",
+    model: process.env.SEEDREAM_4_MODEL ?? "seedream-4-0-250828",
+    usd: 0.03,
+    maxRefs: 10,
+    notes: "official price; multi-reference; older than 4.5",
+  },
+  {
+    id: "byteplus:seedream-5.0-lite",
+    label: "Seedream 5.0 Lite (BytePlus ModelArk)",
+    provider: "byteplus",
+    model: process.env.SEEDREAM_5_LITE_MODEL ?? "seedream-5-0-lite-260128",
+    usd: 0.035,
+    maxRefs: 14,
+    notes: "newer, up to ~14 references",
+  },
 ];
 
 export const DEFAULT_IMAGE_MODEL = () => `gemini:${process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image"}`;
@@ -105,11 +151,24 @@ export function imageModelInfo(id: string): ImageModelInfo {
   throw new Error(`unknown image model "${id}"`);
 }
 
-export type ShotKind = "default" | "wide" | "medium" | "closeup" | "over_shoulder" | "thumbnail";
-export const SHOT_KINDS: ShotKind[] = ["default", "wide", "medium", "closeup", "over_shoulder", "thumbnail"];
+export type ShotKind = "default" | "wide" | "medium" | "closeup" | "over_shoulder" | "empty" | "thumbnail";
+export const SHOT_KINDS: ShotKind[] = ["default", "wide", "medium", "closeup", "over_shoulder", "empty", "thumbnail"];
 
-/** Channel.imageModels → model id for a shot framing (or "thumbnail"). */
-export function modelForShot(imageModels: unknown, kind: string): string {
+const takesRefs = (id: string) => {
+  try {
+    return imageModelInfo(id).maxRefs > 0;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Channel.imageModels → model id for a shot. "empty" (no characters in frame) wins for character-free shots;
+ * a model that can't take reference sheets is never used for a shot with characters.
+ */
+export function modelForShot(imageModels: unknown, kind: string, opts: { characters?: number } = {}): string {
   const map = (imageModels && typeof imageModels === "object" ? imageModels : {}) as Record<string, string>;
-  return map[kind] || map.default || DEFAULT_IMAGE_MODEL();
+  const chars = opts.characters ?? 1;
+  const candidates = [chars === 0 ? map.empty : undefined, map[kind], map.default, DEFAULT_IMAGE_MODEL()].filter(Boolean) as string[];
+  return candidates.find((m) => chars === 0 || takesRefs(m)) ?? DEFAULT_IMAGE_MODEL();
 }

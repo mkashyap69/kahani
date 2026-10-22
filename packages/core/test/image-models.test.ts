@@ -22,12 +22,15 @@ describe("image model selection", () => {
     expect(() => imageModelInfo("fal:unknown-model")).toThrow();
   });
 
-  it("every fal model has both endpoints and only Gemini models have batch prices", () => {
+  it("catalog entries are complete: fal text endpoint (+ edit iff it takes references), BytePlus model ids, batch only on Gemini", () => {
     for (const m of IMAGE_MODELS) {
       if (m.provider === "fal") {
-        expect(m.falEdit && m.falText).toBeTruthy();
-        expect(m.batchUsd).toBeUndefined();
-      } else expect(m.batchUsd).toBeLessThan(m.usd);
+        expect(m.falText).toBeTruthy();
+        expect(Boolean(m.falEdit)).toBe(m.maxRefs > 0);
+      }
+      if (m.provider === "byteplus") expect(m.model).toBeTruthy();
+      if (m.provider === "gemini") expect(m.batchUsd).toBeLessThan(m.usd);
+      else expect(m.batchUsd).toBeUndefined();
     }
   });
 });

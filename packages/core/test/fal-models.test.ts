@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { inMotionScope, videoModelInfo, videoUsdPerSec } from "../src/providers/video-models.js";
 import { imageModelInfo } from "../src/providers/image-models.js";
 import { FalImage, falSizeInput } from "../src/providers/fal-image.js";
-import { FalImageToVideoProvider } from "../src/providers/motion.js";
+import { FalImageToVideoProvider } from "../src/providers/i2v.js";
 import { ffmpeg, probeDuration } from "../src/media/ffmpeg.js";
 import { renderMockFrame } from "../src/providers/mock/image.js";
 

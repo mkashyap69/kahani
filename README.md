@@ -184,11 +184,17 @@ for wide, medium, close-up and over-the-shoulder shots and for thumbnails. The a
 | `fal:qwen-image-edit-2511` | ~0.03 | open model (Apache-2.0), ~3 references |
 | `fal:flux-3-image` | ~0.048 (1 MP tier) | newest FLUX; 1–10 references; `resolution` + `aspect_ratio` inputs |
 | `fal:flux-3-klein` | ~0.008–0.036 (fal lists these as planned prices) | small and cheap; test it on wides and backgrounds |
+| `fal:flux-2-klein-4b` | ~0.005 + 0.005 per reference (per MP) | very cheap open model; check characters stay on-model |
+| `fal:z-image-turbo` | ~0.005 | **text only, no reference sheets**: allowed only for *shots with no characters* |
+| `byteplus:seedream-4.0` | 0.03 | Seedream via BytePlus ModelArk (`BYTEPLUS_ARK_API_KEY`), multi-reference |
+| `byteplus:seedream-5.0-lite` | 0.035 | newer Seedream, up to ~14 references |
 
 The catalog lives in `packages/core/src/providers/image-models.ts`. The fal endpoints are `fal-ai/bytedance/seedream/v4.5/edit`, `fal-ai/flux-2-pro/edit`,
 `fal-ai/qwen-image-edit-2511`, `blackforestlabs/flux-3/edit-image` and `blackforestlabs/flux-3/klein/edit-image`, with matching text-to-image endpoints when a shot has no reference images.
 Reference images are sent as data URIs. Check fal's live API schema if a request is rejected.
 The asset cache key includes the model, so switching a model regenerates only the shots that use it.
+A channel can also set a model for **shots with no characters** (establishing and background shots). That is the only slot where text-only
+models such as Z-Image are used: a model that can't take reference sheets is never used for a shot with characters, even if it's configured.
 
 With **Gemini batch mode** on, Gemini shots are uploaded as one JSONL job to Google's Batch API, which costs about half the standard price.
 The references are uploaded once through the Files API. The image stage then *defers* itself without failing:
@@ -207,6 +213,23 @@ There is one call per line, using the character's speaker, pitch, pace and loudn
 `KenBurnsProvider` (free) uses FFmpeg `zoompan`: a slow pan for wide shots, a push-in for close-ups, a gentle drift for medium shots, and a subtle
 "breathing" scale. Frames are rendered at 2× and downscaled to avoid jitter.
 `FalLipSyncProvider` (per-channel toggle) is used **only for close-up dialogue shots** and falls back to Ken Burns on error.
+
+**Image-to-video models.** These are the available models, each with its own API key. Prices are $ per output second, with audio off:
+
+| Model id | API | $/s | Notes |
+|---|---|---|---|
+| `i2v:seedance-1.5-pro-720p` | BytePlus ModelArk (`BYTEPLUS_ARK_API_KEY`) | 0.026 | best value at 720p (official: $0.13 per silent 5 s clip) |
+| `i2v:seedance-1.5-pro-480p` | BytePlus ModelArk | 0.012 | cheapest credible option |
+| `i2v:wan-2.6-flash-720p` | Alibaba Model Studio / DashScope (`DASHSCOPE_API_KEY`) | ~0.025 | price estimate from resellers |
+| `i2v:wan-2.2-flash-480p` | DashScope | 0.015 | fixed 5 s clips |
+| `i2v:flux-3-max` | fal (`FAL_KEY`) | 0.0425 promo until 2026-11-07, then 0.17 | |
+
+The same rules apply to all of them: the motion scope, clip trimming, dropped model audio, the Ken Burns fallback, and cost logging with the 5 s minimum.
+Seedance runs as a ModelArk async task (`/contents/generations/tasks`, first-frame image, `--resolution/--duration/--camerafixed` prompt flags, `generate_audio: false`).
+Wan runs as a DashScope async `video-synthesis` task, polled through `/tasks/{id}`. If a provider rejects a request, the error is logged and that shot uses Ken Burns.
+
+**Comparing animation.** The **Animation** tab on the comparison page animates the same 1–5 shot images (dialogue close-ups by default) with 2–4 video models.
+It shows the clips side by side with their cost, time and per-story projections. Buttons apply a model to the channel for close-ups, Shorts or all shots.
 
 **Image-to-video (FLUX 3 Max).** Set a channel's **Motion** to *FLUX 3 Max image-to-video*. The model turns each still into a short animated clip,
 with blinks, lip movement, gestures and ambient motion, using a prompt built from the shot's action and emotion.
@@ -349,6 +372,8 @@ npm test
 - `test/script-schema.test.ts`: script JSON validation (fences/prose, normalisation, Devanagari, line length, unknown keys, shot bounds)
 - `test/duration.test.ts`: the shot duration rule, frame alignment, the status machine, timezone scheduling
 - `test/kit.test.ts`: launch-kit schema validation and repair parsing, kid-safety enforcement, voice casting (gender/age fit, distinct voices, clamping, v2/v3 catalogs), music moods
+- `test/cheap-models.test.ts`: the no-characters routing rule (text-only models never used with characters), per-reference pricing, the Seedream (BytePlus) request,
+  Seedance and Wan task submission and polling against fake servers with exact clip fitting, and the video-comparison shot picker
 - `test/fal-models.test.ts`: FLUX 3 Max promo/list pricing and scope rules, fal request shapes (FLUX 3 `resolution`/`aspect_ratio` vs `image_size`),
   and FalImage / image-to-video against a fake fal server, including trimming a 6 s clip with audio to an exact silent 3.4 s shot and the Ken Burns fallback
 - `test/image-models.test.ts`: per-shot-type model selection, catalog validation, comparison shot picking, and the batch submit/poll contract

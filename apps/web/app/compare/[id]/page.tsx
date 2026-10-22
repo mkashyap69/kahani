@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { config, imageModelInfo, prisma, type ComparisonResult } from "@kahani/core";
+import { config, imageModelInfo, prisma, videoModelInfo, videoUsdPerSec, type ComparisonResult } from "@kahani/core";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionButton, AutoRefresh } from "@/components/client";
 import { PageHeader } from "@/components/page-header";
-import { applyImageModelAction } from "@/app/actions";
+import { applyImageModelAction, applyVideoModelAction } from "@/app/actions";
 import { assetUrl, inr } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +31,33 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
   const vertical = item.type === "SHORT";
   const channelModels = (item.channel.imageModels ?? {}) as Record<string, string>;
   const storyShots = item.type === "STORY" ? 141 : 13;
+  const isVideo = cmp.kind === "video";
+  const labelOf = (m: string) => (isVideo ? videoModelInfo(m).label : imageModelInfo(m).label);
 
   const summary = cmp.models.map((m) => {
     const rs = results.filter((r) => r.model === m);
     const ok = rs.filter((r) => !r.error);
+    if (isVideo) {
+      const v = videoModelInfo(m);
+      const rate = videoUsdPerSec(v) * config.usdToInr;
+      return {
+        model: m,
+        info: { label: v.label, notes: v.notes },
+        done: rs.length,
+        ok: ok.length,
+        fallback: rs.some((r) => r.fallback),
+        cost: rs.reduce((a, r) => a + r.costInr, 0),
+        avgMs: ok.length ? ok.reduce((a, r) => a + r.ms, 0) / ok.length : 0,
+        // ~5 billed s per shot: close-ups ≈ 40 shots, all ≈ 140 shots per story
+        perVideo: rate * Math.max(5, v.minSec) * 40,
+        perVideoBatch: rate * Math.max(5, v.minSec) * 140,
+      };
+    }
     const info = imageModelInfo(m);
     return {
       model: m,
       info,
+      fallback: false,
       done: rs.length,
       ok: ok.length,
       cost: rs.reduce((a, r) => a + r.costInr, 0),
@@ -55,7 +74,7 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
         title="Model comparison"
         description={
           <span>
-            <Link href="/compare" className="hover:underline">← Image models</Link> · {item.channel.name} ·{" "}
+            <Link href={isVideo ? "/compare?kind=video" : "/compare"} className="hover:underline">← Model comparison</Link> · {item.channel.name} ·{" "}
             <Link href={`/content/${item.id}`} className="deva hover:underline">{item.title}</Link> · {cmp.shotIdxs.length} shots
           </span>
         }
@@ -73,12 +92,34 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p>
-                {s.ok}/{cmp.shotIdxs.length} images · avg {(s.avgMs / 1000).toFixed(1)}s · this test {inr(s.cost)}
+                {s.ok}/{cmp.shotIdxs.length} {isVideo ? "clips" : "images"} · avg {(s.avgMs / 1000).toFixed(1)}s · this test {inr(s.cost)}
               </p>
+              {s.fallback && <p className="text-xs text-warning">No API key — placeholder (Ken Burns) shown; costs are list-price estimates.</p>}
               <p className="text-muted-foreground">
-                ≈ {inr(s.perVideo)} per {item.type === "STORY" ? "10-min story" : "short"} (~{storyShots} images)
-                {s.perVideoBatch != null && <> · {inr(s.perVideoBatch)} with batch</>}
+                {isVideo ? (
+                  <>
+                    ≈ {inr(s.perVideo)} per story animating close-ups (~40 shots) · {inr(s.perVideoBatch ?? 0)} animating every shot (~140)
+                  </>
+                ) : (
+                  <>
+                    ≈ {inr(s.perVideo)} per {item.type === "STORY" ? "10-min story" : "short"} (~{storyShots} images)
+                    {s.perVideoBatch != null && <> · {inr(s.perVideoBatch)} with batch</>}
+                  </>
+                )}
               </p>
+              {isVideo ? (
+                <div className="flex flex-wrap gap-1">
+                  {item.channel.motionProvider === s.model ? (
+                    <Badge variant="success">used for {item.channel.motionScope}</Badge>
+                  ) : (
+                    (["closeups", "shorts", "all"] as const).map((scope) => (
+                      <ActionButton key={scope} size="sm" variant="outline" action={applyVideoModelAction.bind(null, item.channelId, s.model, scope, cmp.id)}>
+                        Use for {scope === "closeups" ? "close-ups" : scope === "shorts" ? "Shorts" : "all shots"}
+                      </ActionButton>
+                    ))
+                  )}
+                </div>
+              ) : (
               <div className="flex flex-wrap gap-1">
                 {KINDS.map(([kind, label]) =>
                   channelModels[kind] === s.model ? (
@@ -92,6 +133,7 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
                   ),
                 )}
               </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -100,7 +142,9 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
       <Card>
         <CardHeader>
           <CardTitle>Shots</CardTitle>
-          <CardDescription>Same prompt and reference sheets for every model. Costs are list-price estimates.</CardDescription>
+          <CardDescription>
+            {isVideo ? "Same shot image and motion prompt for every model; clips are trimmed to the shot length." : "Same prompt and reference sheets for every model."} Costs are list-price estimates.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {item.shots.map((shot) => (
@@ -115,7 +159,9 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
                   return (
                     <figure key={m} className="space-y-1">
                       <div className={`overflow-hidden rounded-md border bg-muted ${vertical ? "aspect-[9/16]" : "aspect-video"}`}>
-                        {r?.key ? (
+                        {r?.key && isVideo ? (
+                          <video src={assetUrl(r.key)!} controls muted loop playsInline preload="metadata" className="h-full w-full bg-black object-cover" />
+                        ) : r?.key ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <a href={assetUrl(r.key)!} target="_blank"><img src={assetUrl(r.key)!} alt="" className="h-full w-full object-cover" /></a>
                         ) : (
@@ -123,8 +169,8 @@ export default async function ComparisonPage({ params }: { params: Promise<{ id:
                         )}
                       </div>
                       <figcaption className="text-[11px] text-muted-foreground">
-                        {imageModelInfo(m).label}
-                        {r && !r.error && ` · ${(r.ms / 1000).toFixed(1)}s · ${inr(r.costInr)}`}
+                        {labelOf(m)}
+                        {r && !r.error && ` · ${(r.ms / 1000).toFixed(1)}s · ${inr(r.costInr)}${r.fallback ? " (est., placeholder)" : ""}`}
                       </figcaption>
                     </figure>
                   );

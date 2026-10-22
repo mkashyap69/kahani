@@ -4,9 +4,11 @@ import { prisma } from "../db.js";
 import { AnthropicLLM } from "./anthropic.js";
 import { GeminiBatch, GeminiImage, GeminiJudge } from "./gemini.js";
 import { FalImage } from "./fal-image.js";
+import { BytePlusImage } from "./byteplus-image.js";
 import { DEFAULT_IMAGE_MODEL, imageModelInfo } from "./image-models.js";
 import { SarvamTTS } from "./sarvam.js";
-import { FalImageToVideoProvider, FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
+import { FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
+import { BytePlusI2VBackend, DashScopeI2VBackend, FalI2VBackend, ImageToVideoProvider } from "./i2v.js";
 import { videoModelInfo } from "./video-models.js";
 import { YouTubePublisher } from "./youtube.js";
 import { MockLLM } from "./mock/llm.js";
@@ -40,6 +42,10 @@ export async function imageProviderFor(modelId: string): Promise<ImageProvider> 
     const k = await key("GEMINI_API_KEY");
     return k ? new GeminiImage(k, model) : new MockImage(modelId === DEFAULT_IMAGE_MODEL() ? "mock" : modelId);
   }
+  if (info.provider === "byteplus") {
+    const k = await key("BYTEPLUS_ARK_API_KEY");
+    return k ? new BytePlusImage(k, info) : new MockImage(modelId);
+  }
   const k = await key("FAL_KEY");
   return k ? new FalImage(k, info) : new MockImage(modelId);
 }
@@ -69,9 +75,12 @@ export async function musicProvider(): Promise<MusicProvider> {
 /** Per-channel motion provider: "kenburns" (default), "lipsync" (fal.ai close-up dialogue) or an "i2v:…" video model. */
 export async function motionProvider(channelMotion: string, scope = "closeups"): Promise<MotionProvider> {
   if (channelMotion.startsWith("i2v:")) {
-    const k = config.providerMode === "mock" ? undefined : await getSecret("FAL_KEY");
-    if (k) return new FalImageToVideoProvider(k, videoModelInfo(channelMotion), scope);
-    return new KenBurnsProvider();
+    const info = videoModelInfo(channelMotion);
+    const secret = info.provider === "fal" ? "FAL_KEY" : info.provider === "byteplus" ? "BYTEPLUS_ARK_API_KEY" : "DASHSCOPE_API_KEY";
+    const k = config.providerMode === "mock" ? undefined : await getSecret(secret);
+    if (!k) return new KenBurnsProvider();
+    const backend = info.provider === "fal" ? new FalI2VBackend(k, info) : info.provider === "byteplus" ? new BytePlusI2VBackend(k, info) : new DashScopeI2VBackend(k, info);
+    return new ImageToVideoProvider(backend, info, scope);
   }
   if (channelMotion === "lipsync") {
     const k = config.providerMode === "mock" ? undefined : await getSecret("FAL_KEY");

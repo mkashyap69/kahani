@@ -146,15 +146,25 @@ export function ChannelForm({ channel, themes, musicPacks }: { channel?: Channel
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
-          {(["default", "wide", "medium", "closeup", "over_shoulder", "thumbnail"] as const).map((kind) => {
+          {(["default", "wide", "medium", "closeup", "over_shoulder", "empty", "thumbnail"] as const).map((kind) => {
             const current = ((c?.imageModels ?? {}) as Record<string, string>)[kind] ?? "";
+            const label =
+              kind === "default"
+                ? "Default (all shots)"
+                : kind === "over_shoulder"
+                  ? "Over-the-shoulder shots"
+                  : kind === "thumbnail"
+                    ? "Thumbnails"
+                    : kind === "empty"
+                      ? "Shots with no characters"
+                      : `${kind[0].toUpperCase()}${kind.slice(1)} shots`;
             return (
-              <Field key={kind} label={kind === "default" ? "Default (all shots)" : kind === "over_shoulder" ? "Over-the-shoulder shots" : kind === "thumbnail" ? "Thumbnails" : `${kind[0].toUpperCase()}${kind.slice(1)} shots`}>
+              <Field key={kind} label={label} hint={kind === "empty" ? "establishing / background shots — the only place text-only models (e.g. Z-Image) are allowed" : undefined}>
                 <Select name={`imageModel_${kind}`} defaultValue={current}>
                   <option value="">{kind === "default" ? "Nano Banana (env default)" : "— same as default —"}</option>
-                  {IMAGE_MODELS.map((m) => (
+                  {IMAGE_MODELS.filter((m) => kind === "empty" || m.maxRefs > 0).map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.label} · ${m.usd}/img
+                      {m.label} · ${m.usd}/img{m.usdPerRef ? ` + $${m.usdPerRef}/ref` : ""}
                     </option>
                   ))}
                 </Select>

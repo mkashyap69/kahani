@@ -129,7 +129,7 @@ export async function saveChannelAction(form: FormData) {
     aiDisclosure: true,
     imageBatch: bool(form, "imageBatch"),
     imageModels: Object.fromEntries(
-      ["default", "wide", "medium", "closeup", "over_shoulder", "thumbnail"].map((k) => [k, str(form, `imageModel_${k}`)]).filter(([, v]) => v),
+      ["default", "wide", "medium", "closeup", "over_shoulder", "empty", "thumbnail"].map((k) => [k, str(form, `imageModel_${k}`)]).filter(([, v]) => v),
     ),
   };
   if (!data.name || !data.themeId) throw new Error("name and theme are required");
@@ -440,13 +440,21 @@ export async function createComparisonAction(form: FormData) {
     .split(/[\s,]+/)
     .map(Number)
     .filter((n) => Number.isInteger(n) && n > 0);
-  const cmp = await createComparison(itemId, models, shots);
+  const kind = str(form, "kind") === "video" ? "video" : "image";
+  const cmp = await createComparison(itemId, models, shots, kind);
   await enqueueStudio({ kind: "image-compare", comparisonId: cmp.id });
   redirect(`/compare/${cmp.id}`);
 }
 
 export async function applyImageModelAction(channelId: string, kind: ShotKind, model: string, comparisonId: string) {
   await setChannelImageModel(channelId, kind, model);
+  revalidatePath(`/compare/${comparisonId}`);
+  revalidatePath(`/channels/${channelId}`);
+}
+
+export async function applyVideoModelAction(channelId: string, model: string, scope: string, comparisonId: string) {
+  if (!VIDEO_MODELS.some((v) => v.id === model)) throw new Error("unknown video model");
+  await prisma.channel.update({ where: { id: channelId }, data: { motionProvider: model, motionScope: scope } });
   revalidatePath(`/compare/${comparisonId}`);
   revalidatePath(`/channels/${channelId}`);
 }

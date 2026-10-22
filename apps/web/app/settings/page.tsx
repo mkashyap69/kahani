@@ -15,6 +15,8 @@ const LABELS: Record<string, string> = {
   SARVAM_API_KEY: "Sarvam AI (Bulbul TTS)",
   FAL_KEY: "fal.ai (Seedream / FLUX.2 / Qwen images + optional lip-sync)",
   ELEVENLABS_API_KEY: "ElevenLabs (Eleven Music — background music generation)",
+  BYTEPLUS_ARK_API_KEY: "BytePlus ModelArk (Seedance video, Seedream images)",
+  DASHSCOPE_API_KEY: "Alibaba Cloud Model Studio / DashScope (Wan video)",
   YOUTUBE_CLIENT_ID: "YouTube OAuth client ID",
   YOUTUBE_CLIENT_SECRET: "YouTube OAuth client secret",
 };

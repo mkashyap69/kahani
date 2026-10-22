@@ -111,7 +111,7 @@ export async function runImagesStage(itemId: string): Promise<void> {
   const judge = settings.consistencyCheck ? await visionJudge() : null;
   const models = item.channel.imageModels;
   const plan = item.shots.map((shot) => {
-    const model = modelForShot(models, shot.framing);
+    const model = modelForShot(models, shot.framing, { characters: shot.charactersInFrame.length });
     return { shot, model, spec: shotImageSpec(item, shot, targets.aspect, model) };
   });
   let todo = plan.filter((p) => !p.shot.imageKey || p.shot.imageHash !== p.spec.hash);
@@ -208,7 +208,7 @@ export async function runImagesStage(itemId: string): Promise<void> {
 
   // 3) standard (synchronous) calls
   await runSync(item, syncTodo, targets.aspect, judge, settings);
-  await generateThumbnail(item, await imageProviderFor(modelForShot(models, "thumbnail")), targets);
+  await generateThumbnail(item, await imageProviderFor(modelForShot(models, "thumbnail", { characters: 1 })), targets);
 }
 
 async function runSync(

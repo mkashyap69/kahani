@@ -7,6 +7,8 @@ import type { CallContext, ImageProvider, ImageRequest } from "./types.js";
 
 const SIZE: Record<string, string> = { "16:9": "landscape_16_9", "9:16": "portrait_16_9", "1:1": "square_hd" };
 
+export const imageCostUsd = (info: ImageModelInfo, refs: number) => info.usd + refs * (info.usdPerRef ?? 0);
+
 /** Output size in the shape each endpoint expects. */
 export function falSizeInput(info: Pick<ImageModelInfo, "sizeParam">, aspect: "16:9" | "9:16" | "1:1"): Record<string, unknown> {
   if (info.sizeParam === "resolution_aspect") return { resolution: "1k", aspect_ratio: aspect };
@@ -31,7 +33,7 @@ export class FalImage implements ImageProvider {
   }
 
   async generate(req: ImageRequest, ctx: CallContext) {
-    const refs = req.references.slice(0, this.info.maxRefs);
+    const refs = this.info.falEdit ? req.references.slice(0, this.info.maxRefs) : [];
     const endpoint = refs.length ? this.info.falEdit! : this.info.falText!;
     const labels = refs.map((r, i) => `Image ${i + 1}: ${r.label ?? "reference"}`).join("; ");
     const input: Record<string, unknown> = {
@@ -69,7 +71,7 @@ export class FalImage implements ImageProvider {
         },
         { retries: 3, baseMs: 2000 },
       );
-      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.info.id, operation: ctx.operation ?? "image", images: 1, costInr: this.info.usd * config.usdToInr });
+      await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.info.id, operation: ctx.operation ?? "image", images: 1, costInr: imageCostUsd(this.info, refs.length) * config.usdToInr });
       return out;
     } catch (err) {
       await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: "fal", model: this.info.id, operation: ctx.operation ?? "image", success: false, error: String(err) });
