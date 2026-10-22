@@ -1,0 +1,319 @@
+// Kahani Studio domain model
+// Channel → Theme → (Characters, Voices, Storyline, Locations) → Episodes / Shorts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentType {
+  STORY
+  SHORT
+}
+
+enum ContentStatus {
+  QUEUED
+  SCRIPTING
+  SCRIPT_READY
+  IMAGING
+  IMAGES_READY
+  VOICING
+  ANIMATING
+  ASSEMBLING
+  REVIEW
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+enum ShortsMode {
+  MINI_STORY // self-contained mini-story with the same characters
+  TEASER // cliffhanger teaser leading into today's story
+}
+
+enum SheetStatus {
+  NONE
+  GENERATING
+  PENDING_APPROVAL
+  APPROVED
+}
+
+model Channel {
+  id               String  @id @default(cuid())
+  name             String
+  youtubeChannelId String?
+  /// AES-256-GCM encrypted JSON of Google OAuth tokens
+  oauthTokensEnc   String?
+  language         String  @default("hi-IN")
+  timezone         String  @default("Asia/Kolkata")
+  active           Boolean @default(true)
+
+  themeId String @unique
+  theme   Theme  @relation(fields: [themeId], references: [id])
+
+  // schedule (HH:mm in the channel's timezone)
+  generationTime     String @default("02:00")
+  storyPublishTime   String @default("18:00")
+  shortPublishTimes  String[] @default(["12:00", "20:30"])
+
+  // defaults
+  thumbnailStyle     String     @default("bold-closeup")
+  introClipKey       String?
+  outroClipKey       String?
+  musicPack          String     @default("village-warm")
+  subtitlesEnabled   Boolean    @default(true)
+  madeForKids        Boolean    @default(false)
+  /// YouTube synthetic/altered content disclosure. Always true; kept as a column for auditability.
+  aiDisclosure       Boolean    @default(true)
+  autoPublish        Boolean    @default(false)
+  shortsMode         ShortsMode @default(TEASER)
+  /// "kenburns" (free) or "lipsync" (close-up dialogue shots go through fal.ai)
+  motionProvider     String     @default("kenburns")
+  /// Story target length in minutes (8–15)
+  storyTargetMinutes Int        @default(10)
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  content   ContentItem[]
+  dailyRuns DailyRun[]
+}
+
+model Theme {
+  id              String   @id @default(cuid())
+  name            String
+  genre           String
+  artStylePrompt  String
+  negativeStyle   String   @default("")
+  tone            String   @default("")
+  targetAudience  String   @default("family")
+  contentRules    String   @default("")
+  /// strict kid-safe content profile
+  kidSafe         Boolean  @default(false)
+  /// storage keys of the last "Test style" run
+  styleTestImages String[] @default([])
+  styleTestStatus String   @default("idle")
+  // narrator voice (Sarvam Bulbul)
+  narratorSpeaker  String @default("vidya")
+  narratorPitch    Float  @default(0)
+  narratorPace     Float  @default(0.95)
+  narratorLoudness Float  @default(1)
+
+  channel    Channel?
+  characters Character[]
+  locations  Location[]
+  storyline  Storyline?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Character {
+  id                String      @id @default(cuid())
+  themeId           String
+  theme             Theme       @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  /// slug used inside scripts (e.g. "priya")
+  key               String
+  name              String
+  role              String
+  age               Int?
+  personality       String
+  speechStyle       String
+  visualDescription String
+  /// storage keys of the approved character sheet images
+  referenceImages   String[]    @default([])
+  /// candidate sheet awaiting approval
+  pendingImages     String[]    @default([])
+  sheetStatus       SheetStatus @default(NONE)
+
+  // voice (Sarvam Bulbul)
+  voiceSpeaker  String @default("anushka")
+  voicePitch    Float  @default(0)
+  voicePace     Float  @default(1)
+  voiceLoudness Float  @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([themeId, key])
+}
+
+model Location {
+  id              String   @id @default(cuid())
+  themeId         String
+  theme           Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  key             String
+  name            String
+  description     String
+  referenceImage  String?
+  pendingImage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([themeId, key])
+}
+
+model Storyline {
+  id             String   @id @default(cuid())
+  themeId        String   @unique
+  theme          Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  premise        String
+  worldRules     String   @default("")
+  characterArcs  String   @default("")
+  runningGags    String   @default("")
+  forbiddenTopics String  @default("")
+  /// rolling summary of every published episode
+  storyMemory    String   @default("")
+  episodeCount   Int      @default(0)
+  openThreads    String[] @default([])
+
+  directives StoryDirective[]
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+}
+
+/// Manually seeded "next episode should…" directive. Consumed by the next STORY script.
+model StoryDirective {
+  id           String    @id @default(cuid())
+  storylineId  String
+  storyline    Storyline @relation(fields: [storylineId], references: [id], onDelete: Cascade)
+  text         String
+  consumedById String?
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+/// One per channel per local date. Guarantees the daily job is idempotent.
+model DailyRun {
+  id        String        @id @default(cuid())
+  channelId String
+  channel   Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  /// YYYY-MM-DD in channel timezone
+  runDate   String
+  createdAt DateTime      @default(now())
+  items     ContentItem[]
+
+  @@unique([channelId, runDate])
+}
+
+model ContentItem {
+  id            String        @id @default(cuid())
+  type          ContentType
+  channelId     String
+  channel       Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  dailyRunId    String?
+  dailyRun      DailyRun?     @relation(fields: [dailyRunId], references: [id], onDelete: SetNull)
+  /// For shorts in TEASER mode: the story they tease
+  parentId      String?
+  parent        ContentItem?  @relation("Teaser", fields: [parentId], references: [id], onDelete: SetNull)
+  children      ContentItem[] @relation("Teaser")
+  /// 1 or 2 for the daily shorts, 0 for stories
+  slot          Int           @default(0)
+
+  episodeNumber Int?
+  status        ContentStatus @default(QUEUED)
+  failedStage   ContentStatus?
+  error         String?
+  scriptJson    Json?
+  safetyReport  Json?
+  title         String?
+  /// YouTube metadata (title/description/tags) — editable in the UI
+  youtubeMeta   Json?
+  thumbnailKey  String?
+  videoKey      String?
+  durationSec   Float?
+  /// accumulated estimated cost in INR
+  costInr       Float         @default(0)
+  scheduledPublishAt DateTime?
+  youtubeVideoId String?
+  memoryApplied Boolean       @default(false)
+  reviewNote    String?
+
+  shots    Shot[]
+  apiCalls ApiCallLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channelId, createdAt])
+  @@index([status])
+}
+
+model Shot {
+  id            String      @id @default(cuid())
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  idx           Int
+  location      String
+  timeOfDay     String
+  framing       String
+  charactersInFrame String[]
+  speaker       String?
+  dialogueHi    String?
+  emotion       String
+  action        String
+  imagePromptEn String
+  sfx           String?
+  estSeconds    Float
+  /// bumped by "regenerate" so the asset hash (and cache key) changes
+  variant       Int         @default(0)
+
+  // assets — each one carries the hash of the inputs that produced it,
+  // so unchanged shots are never regenerated (or re-paid for).
+  imageKey      String?
+  imageHash     String?
+  consistencyScore Float?
+  audioKey      String?
+  audioHash     String?
+  audioSeconds  Float?
+  durationSec   Float?
+  clipKey       String?
+  clipHash      String?
+  error         String?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([contentItemId, idx])
+}
+
+model ApiCallLog {
+  id            String       @id @default(cuid())
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+  provider      String
+  model         String
+  operation     String
+  inputTokens   Int          @default(0)
+  outputTokens  Int          @default(0)
+  characters    Int          @default(0)
+  images        Int          @default(0)
+  seconds       Float        @default(0)
+  costInr       Float        @default(0)
+  success       Boolean      @default(true)
+  error         String?
+  createdAt     DateTime     @default(now())
+
+  @@index([createdAt])
+  @@index([contentItemId])
+}
+
+/// Prompt-hash keyed cache of generated assets (shared across items).
+model AssetCache {
+  hash      String   @id
+  kind      String
+  key       String
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+/// Key/value settings. Secrets are stored encrypted (isSecret = true).
+model Setting {
+  key       String   @id
+  value     String
+  isSecret  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}

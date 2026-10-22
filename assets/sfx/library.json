@@ -1,0 +1,131 @@
+[
+  {
+    "file": "birds.wav",
+    "tags": [
+      "birds chirping",
+      "morning",
+      "birdsong",
+      "village ambience"
+    ]
+  },
+  {
+    "file": "crowd.wav",
+    "tags": [
+      "crowd murmur",
+      "people talking",
+      "market",
+      "gathering",
+      "chaupal"
+    ]
+  },
+  {
+    "file": "door-knock.wav",
+    "tags": [
+      "door knock",
+      "knocking",
+      "knock"
+    ]
+  },
+  {
+    "file": "cooker-whistle.wav",
+    "tags": [
+      "pressure cooker whistle",
+      "whistle",
+      "kitchen"
+    ]
+  },
+  {
+    "file": "cow-moo.wav",
+    "tags": [
+      "cow moo",
+      "cow",
+      "buffalo",
+      "animal"
+    ]
+  },
+  {
+    "file": "wind.wav",
+    "tags": [
+      "wind",
+      "breeze",
+      "fields",
+      "storm"
+    ]
+  },
+  {
+    "file": "temple-bell.wav",
+    "tags": [
+      "temple bell",
+      "bell",
+      "ring",
+      "aarti"
+    ]
+  },
+  {
+    "file": "boing.wav",
+    "tags": [
+      "comedic boing",
+      "boing",
+      "funny",
+      "cartoon",
+      "bounce"
+    ]
+  },
+  {
+    "file": "crickets.wav",
+    "tags": [
+      "crickets",
+      "night",
+      "insects",
+      "night ambience"
+    ]
+  },
+  {
+    "file": "footsteps.wav",
+    "tags": [
+      "footsteps",
+      "walking",
+      "running",
+      "steps"
+    ]
+  },
+  {
+    "file": "rain.wav",
+    "tags": [
+      "rain",
+      "monsoon",
+      "drizzle",
+      "storm"
+    ]
+  },
+  {
+    "file": "phone-ping.wav",
+    "tags": [
+      "phone notification",
+      "phone ring",
+      "message",
+      "ping",
+      "mobile"
+    ]
+  },
+  {
+    "file": "sting.wav",
+    "tags": [
+      "dramatic sting",
+      "suspense",
+      "shock",
+      "reveal",
+      "dramatic"
+    ]
+  },
+  {
+    "file": "kettle-pour.wav",
+    "tags": [
+      "chai",
+      "tea pouring",
+      "kettle",
+      "pouring",
+      "steam"
+    ]
+  }
+]

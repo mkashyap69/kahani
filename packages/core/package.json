@@ -1,0 +1,36 @@
+{
+  "name": "@kahani/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "db:generate": "dotenv -e ../../.env -- prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@google/genai": "^1.52.0",
+    "@prisma/client": "6.19.3",
+    "bullmq": "^5.81.0",
+    "googleapis": "^150.0.0",
+    "ioredis": "^5.4.0",
+    "sharp": "^0.34.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0",
+    "prisma": "6.19.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "kahani-studio",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "db:generate": "npm run db:generate -w @kahani/core",
+    "db:migrate": "npm run db:migrate -w @kahani/core",
+    "db:deploy": "npm run db:deploy -w @kahani/core",
+    "db:seed": "npm run db:seed -w @kahani/core",
+    "assets": "tsx scripts/generate-assets.ts",
+    "demo": "npm run demo -w @kahani/worker --",
+    "worker": "npm run start -w @kahani/worker",
+    "scheduler": "npm run scheduler -w @kahani/worker",
+    "dev:web": "npm run dev -w @kahani/web",
+    "build:web": "npm run build -w @kahani/web",
+    "test": "npm run test -w @kahani/core",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0",
+    "@types/node": "^22.10.0"
+  }
+}
