@@ -112,7 +112,8 @@ The `migrate` service applies migrations and seeds the demo channel. Assets are 
 | `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL`, `GEMINI_VISION_MODEL` | Nano Banana (`gemini-2.5-flash-image`) and the consistency judge (`gemini-2.5-flash`) |
 | `SARVAM_API_KEY`, `SARVAM_TTS_MODEL` | Sarvam Bulbul TTS. `bulbul:v2` (default) has 7 voices with pitch/pace/loudness; `bulbul:v3` has about 37 voices (pace only). Voice pickers and the launch-kit caster follow this setting |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_MUSIC_MODEL` | Background music generation with ElevenLabs Eleven Music (default model `music_v1`). Without a key, music is a synthesised placeholder |
-| `FAL_KEY`, `FAL_LIPSYNC_MODEL` | Optional fal.ai lip-sync for close-up dialogue shots (default `veed/fabric-1.0`) |
+| `FAL_KEY`, `FAL_LIPSYNC_MODEL` | fal.ai: Seedream 4.5, FLUX.2 [pro] and Qwen Image Edit image models, plus optional lip-sync for close-up dialogue shots (default `veed/fabric-1.0`) |
+| `IMAGE_BATCH_POLL_SEC`, `IMAGE_BATCH_MAX_HOURS` | Gemini batch mode: how often the worker checks a batch (default 120s), and after how many hours to cancel it and use standard calls (default 20) |
 | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | Google OAuth client (YouTube Data API v3) |
 | `IMAGE_CONCURRENCY`, `TTS_CONCURRENCY`, `MOTION_CONCURRENCY` | Defaults for the per-stage limits (editable in Settings) |
 | `PIPELINE_CONCURRENCY` | How many items the worker processes in parallel (default 3) |
@@ -171,6 +172,29 @@ The aspect ratio is 16:9 for stories and 9:16 for Shorts.
 The **thumbnail** is a bold close-up of the main character. The big Hindi title is rendered by code with libass (Baloo 2), never by the model.
 A character with no sheet yet gets one generated and auto-approved, so a new theme can still run; review it in Character Studio.
 
+**Image models and batch mode.** Each channel picks an image model per shot type in its **Image models** section: a default plus optional overrides
+for wide, medium, close-up and over-the-shoulder shots and for thumbnails. The available models are:
+
+| Model id | Est. $/image | Notes |
+|---|---|---|
+| `gemini:gemini-2.5-flash-image` (Nano Banana, default) | 0.039 (0.0195 batch) | strong consistency from character sheets |
+| `gemini:gemini-3-pro-image-preview` (Nano Banana Pro) | 0.134 (0.067 batch) | premium; good for thumbnails |
+| `fal:seedream-4.5` | 0.04 | up to ~10 reference images |
+| `fal:flux-2-pro` | ~0.06 (priced per megapixel) | FLUX.2 [pro] edit |
+| `fal:qwen-image-edit-2511` | ~0.03 | open model (Apache-2.0), ~3 references |
+
+The catalog lives in `packages/core/src/providers/image-models.ts`. The fal endpoints are `fal-ai/bytedance/seedream/v4.5/edit`, `fal-ai/flux-2-pro/edit` and
+`fal-ai/qwen-image-edit-2511`, with matching text-to-image endpoints when a shot has no reference images.
+Reference images are sent as data URIs. Check fal's live API schema if a request is rejected.
+The asset cache key includes the model, so switching a model regenerates only the shots that use it.
+
+With **Gemini batch mode** on, Gemini shots are uploaded as one JSONL job to Google's Batch API, which costs about half the standard price.
+The references are uploaded once through the Files API. The image stage then *defers* itself without failing:
+the worker checks every `IMAGE_BATCH_POLL_SEC`, collects the images when the job finishes, and continues the pipeline.
+Non-Gemini shots run straight away. Shots the batch didn't return, or that failed the consistency check, are redone with standard calls.
+If a batch passes `IMAGE_BATCH_MAX_HOURS`, it is cancelled and the remaining shots are generated normally.
+Try it with `npm run demo -- --batch`.
+
 **3. Voices (Sarvam Bulbul, hi-IN).**
 There is one call per line, using the character's speaker, pitch, pace and loudness (the narrator voice is set on the theme).
 - Each line gets two-pass `loudnorm` to −16 LUFS.
@@ -213,6 +237,7 @@ Uploads use the YouTube Data API v3 resumable protocol. The upload session URI i
 | **Review Queue** `/review` | Watch and **Approve & publish** or **Reject** |
 | **Launch Kit** `/launch` | One-line idea → researched, editable channel package → **Create channel** (see below) |
 | **Music** `/music` | Music packs: generate instrumental tracks (Eleven Music), upload tracks you've licensed (with a required licence note), preview, delete |
+| **Image Models** `/compare` | Generate the same 10 shots with 2–4 image models (same prompts and character sheets), compare them side by side with cost and speed, and apply a model to a channel's shot type with one click |
 | **Settings** `/settings` | Encrypted API keys, script model, concurrency limits, consistency check, max shots, monthly budget cap |
 
 The image/voice/sheet/style-test jobs run in the worker, so keep `npm run worker` running while you use the UI.
@@ -233,6 +258,8 @@ and is visible per item in the UI. Pricing constants are in `packages/core/src/c
 | **Total** | **≈ ₹570** | **≈ ₹52** |
 
 That is roughly **₹675 per channel per day, about ₹20,000 per month**.
+- Gemini batch mode halves the image line: a story comes to ≈ ₹300 and a short ≈ ₹30, so a channel costs ≈ ₹360/day, about ₹11,000/month.
+- Other image models change the image line too. Use the **Image Models** page to measure cost and quality on your own shots.
 - The optional consistency check adds roughly 10–30% to image cost, depending on regenerations.
 - fal.ai lip-sync on close-up dialogue shots costs about $0.08 per output second, roughly ₹800+ extra per story for ~30 close-ups. Enable it per channel only if it's worth it.
 - Re-running unchanged shots costs nothing, because of the asset cache.
@@ -310,6 +337,7 @@ npm test
 - `test/script-schema.test.ts`: script JSON validation (fences/prose, normalisation, Devanagari, line length, unknown keys, shot bounds)
 - `test/duration.test.ts`: the shot duration rule, frame alignment, the status machine, timezone scheduling
 - `test/kit.test.ts`: launch-kit schema validation and repair parsing, kid-safety enforcement, voice casting (gender/age fit, distinct voices, clamping, v2/v3 catalogs), music moods
+- `test/image-models.test.ts`: per-shot-type model selection, catalog validation, comparison shot picking, and the batch submit/poll contract
 - `test/assembly.test.ts`: renders a **3-shot fixture** (two locations → one crossfade, two dialogue lines + one silent shot)
   through Ken Burns + loudness normalisation + full assembly with music, SFX, subtitles, intro and outro. It checks codecs, size,
   duration, and the Shorts length cap.

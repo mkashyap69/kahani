@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Inbox, LayoutDashboard, Palette, Settings, Tv, ListVideo, Rocket, Music } from "lucide-react";
+import { Clapperboard, Inbox, LayoutDashboard, Palette, Settings, Tv, ListVideo, Rocket, Music, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/channels", label: "Channels", icon: Tv },
   { href: "/themes", label: "Themes", icon: Palette },
   { href: "/music", label: "Music", icon: Music },
+  { href: "/compare", label: "Image Models", icon: Images },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

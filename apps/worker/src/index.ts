@@ -22,6 +22,7 @@ import {
   regenerateKitMusic,
   generateMusicTrack,
   runLaunchKit,
+  runComparison,
   runStage,
   runStyleTest,
   syncSchedules,
@@ -43,7 +44,7 @@ async function main() {
       const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
       try {
         const follow = await runStage(job.data.itemId, job.data.stage, { finalAttempt });
-        for (const f of follow) await enqueueStage(f.itemId, f.stage);
+        for (const f of follow) await enqueueStage(f.itemId, f.stage, f.delayMs);
         return { next: follow };
       } catch (err) {
         if (isNonRetryable(err)) throw new UnrecoverableError(String((err as Error).message ?? err));
@@ -74,6 +75,8 @@ async function main() {
           return regenerateKitMusic(d.kitId);
         case "music-generate":
           return generateMusicTrack(d);
+        case "image-compare":
+          return runComparison(d.comparisonId);
         case "youtube-branding":
           return pushChannelBranding(d.channelId);
         case "daily-run": {

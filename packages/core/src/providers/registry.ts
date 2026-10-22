@@ -2,16 +2,18 @@ import { config } from "../config.js";
 import { getSecret, getSettings, type SecretKey } from "../settings.js";
 import { prisma } from "../db.js";
 import { AnthropicLLM } from "./anthropic.js";
-import { GeminiImage, GeminiJudge } from "./gemini.js";
+import { GeminiBatch, GeminiImage, GeminiJudge } from "./gemini.js";
+import { FalImage } from "./fal-image.js";
+import { DEFAULT_IMAGE_MODEL, imageModelInfo } from "./image-models.js";
 import { SarvamTTS } from "./sarvam.js";
 import { FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
 import { YouTubePublisher } from "./youtube.js";
 import { MockLLM } from "./mock/llm.js";
-import { MockImage, MockJudge } from "./mock/image.js";
+import { MockImage, MockImageBatch, MockJudge } from "./mock/image.js";
 import { MockTTS } from "./mock/tts.js";
 import { MockPublisher } from "./mock/publisher.js";
 import { ElevenLabsMusic, MockMusic } from "./music.js";
-import type { ImageProvider, LLMProvider, MotionProvider, MusicProvider, Publisher, TTSProvider, VisionJudge } from "./types.js";
+import type { ImageBatchProvider, ImageProvider, LLMProvider, MotionProvider, MusicProvider, Publisher, TTSProvider, VisionJudge } from "./types.js";
 
 async function key(name: SecretKey): Promise<string | undefined> {
   if (config.providerMode === "mock") return undefined;
@@ -26,8 +28,26 @@ export async function llmProvider(): Promise<LLMProvider> {
 }
 
 export async function imageProvider(): Promise<ImageProvider> {
+  return imageProviderFor(DEFAULT_IMAGE_MODEL());
+}
+
+/** Provider for a catalog model id ("gemini:…", "fal:…"). Missing keys fall back to a tinted offline mock in auto mode. */
+export async function imageProviderFor(modelId: string): Promise<ImageProvider> {
+  const info = imageModelInfo(modelId);
+  const [, model] = modelId.split(":");
+  if (info.provider === "gemini") {
+    const k = await key("GEMINI_API_KEY");
+    return k ? new GeminiImage(k, model) : new MockImage(modelId === DEFAULT_IMAGE_MODEL() ? "mock" : modelId);
+  }
+  const k = await key("FAL_KEY");
+  return k ? new FalImage(k, info) : new MockImage(modelId);
+}
+
+export async function imageBatchProviderFor(modelId: string): Promise<ImageBatchProvider> {
+  const info = imageModelInfo(modelId);
+  if (info.provider !== "gemini") throw new Error(`${modelId} has no batch mode`);
   const k = await key("GEMINI_API_KEY");
-  return k ? new GeminiImage(k, config.geminiImageModel) : new MockImage();
+  return k ? new GeminiBatch(k, modelId.split(":")[1]) : new MockImageBatch(modelId === DEFAULT_IMAGE_MODEL() ? "mock" : modelId);
 }
 
 export async function visionJudge(): Promise<VisionJudge> {

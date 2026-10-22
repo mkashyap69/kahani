@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import sharp from "sharp";
 import { logApiCall } from "../../cost.js";
-import type { CallContext, ImageProvider, ImageRequest, VisionJudge } from "../types.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { config } from "../../config.js";
+import type { BatchImageRequest, BatchPoll, CallContext, ImageBatchProvider, ImageProvider, ImageRequest, VisionJudge } from "../types.js";
 
 const PALETTE = ["#ff6fa8", "#2fb36d", "#f7b733", "#4a90e2", "#e94e3c", "#8e5bd8", "#20b2aa", "#ff8c42"];
 const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#d8a47f"];
@@ -96,9 +99,11 @@ function renderMockLogo(W: number, m: NonNullable<ImageRequest["meta"]>): Promis
 
 export class MockImage implements ImageProvider {
   readonly name = "mock-image";
-  readonly model = "mock";
+  /** the real model this stands in for (tints frames so comparisons are visibly different) */
+  constructor(readonly model = "mock") {}
   async generate(req: ImageRequest, ctx: CallContext) {
-    const data = await renderMockFrame(req);
+    let data = await renderMockFrame({ ...req, meta: { ...req.meta, title: this.model === "mock" ? req.meta?.title : `${this.model} · ${req.meta?.title ?? ""}` } });
+    if (this.model !== "mock") data = await sharp(data).modulate({ hue: h(this.model) % 360 }).png().toBuffer();
     await logApiCall({ contentItemId: ctx.contentItemId, launchKitId: ctx.launchKitId, provider: this.name, model: this.model, operation: ctx.operation ?? "image", images: 1 });
     return { data, mime: "image/png" };
   }
@@ -109,4 +114,28 @@ export class MockJudge implements VisionJudge {
   async scoreConsistency() {
     return { score: 8, reason: "mock judge" };
   }
+}
+
+/** Offline batch: renders immediately and "completes" on the first poll. */
+export class MockImageBatch implements ImageBatchProvider {
+  readonly name = "mock-batch";
+  constructor(readonly model = "mock") {}
+  async submit(requests: BatchImageRequest[], label: string) {
+    const job = `mock-batch-${label}-${Date.now().toString(36)}`;
+    const dir = path.join(config.workDir, "_batches", job);
+    await fs.mkdir(dir, { recursive: true });
+    const img = new MockImage(this.model);
+    for (const r of requests) {
+      const res = await img.generate({ prompt: r.prompt, references: r.references, aspect: r.aspect, meta: r.meta }, { operation: "mock-batch" });
+      await fs.writeFile(path.join(dir, `${r.key}.png`), res.data);
+    }
+    return job;
+  }
+  async poll(job: string): Promise<BatchPoll> {
+    const dir = path.join(config.workDir, "_batches", job);
+    const results = new Map<string, { data: Buffer; mime: string } | { error: string }>();
+    for (const f of await fs.readdir(dir)) results.set(f.replace(/\.png$/, ""), { data: await fs.readFile(path.join(dir, f)), mime: "image/png" });
+    return { done: true, results };
+  }
+  async cancel() {}
 }

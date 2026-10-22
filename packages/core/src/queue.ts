@@ -21,7 +21,8 @@ export type StudioJob =
   | { kind: "kit-art"; kitId: string; what: "logo" | "banner" }
   | { kind: "kit-music"; kitId: string }
   | { kind: "music-generate"; pack: string; title: string; prompt: string; lengthSec: number; mood?: string }
-  | { kind: "youtube-branding"; channelId: string };
+  | { kind: "youtube-branding"; channelId: string }
+  | { kind: "image-compare"; comparisonId: string };
 
 let connection: Redis | undefined;
 let producer: Redis | undefined;
@@ -53,7 +54,8 @@ export function queue(name: string): Queue {
 /** Idempotent: one live job per (item, stage). A finished/failed job with the same id is replaced. */
 export async function enqueueStage(itemId: string, stage: Stage, delayMs = 0) {
   const q = queue(PIPELINE_QUEUE);
-  const jobId = `${itemId}__${stage}`;
+  // deferred re-checks get their own id (the current job with the plain id is still active)
+  const jobId = delayMs > 0 ? `${itemId}__${stage}__d${Date.now().toString(36)}` : `${itemId}__${stage}`;
   const existing = await q.getJob(jobId);
   if (existing) {
     const state = await existing.getState();
@@ -73,7 +75,9 @@ export async function enqueueStudio(job: StudioJob) {
           ? job.themeId
           : job.kind === "daily-run" || job.kind === "youtube-branding"
             ? job.channelId
-            : job.kind === "launch-kit" || job.kind === "kit-music"
+            : job.kind === "image-compare"
+              ? job.comparisonId
+              : job.kind === "launch-kit" || job.kind === "kit-music"
               ? job.kitId
               : job.kind === "kit-art"
                 ? `${job.kitId}-${job.what}`

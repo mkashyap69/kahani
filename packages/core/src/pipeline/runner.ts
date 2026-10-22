@@ -2,7 +2,7 @@ import type { ContentStatus } from "@prisma/client";
 import { prisma } from "../db.js";
 import { STAGE_RUNNING, type Stage } from "../domain/status.js";
 import { errMsg, logger } from "../util/log.js";
-import { assertBudget, setStatus } from "./common.js";
+import { assertBudget, setStatus, StageDeferred } from "./common.js";
 import { runScriptStage } from "./script.js";
 import { runImagesStage } from "./images.js";
 import { runVoicesStage } from "./voices.js";
@@ -27,6 +27,8 @@ const PAID: Stage[] = ["script", "images", "voices", "motion"];
 export interface FollowUp {
   itemId: string;
   stage: Stage;
+  /** re-run later (deferred stages, e.g. waiting on a Gemini batch) */
+  delayMs?: number;
 }
 
 export function isNonRetryable(err: unknown) {
@@ -53,6 +55,10 @@ export async function runStage(itemId: string, stage: Stage, opts: { finalAttemp
     await STAGE_FNS[stage](itemId);
     log.info(`✔ ${stage} (${((Date.now() - t0) / 1000).toFixed(1)}s)`, { itemId, type: item.type });
   } catch (err) {
+    if (err instanceof StageDeferred) {
+      log.info(`… ${stage} deferred: ${err.message} (next check in ${Math.round(err.delayMs / 1000)}s)`, { itemId });
+      return [{ itemId, stage, delayMs: err.delayMs }];
+    }
     const final = opts.finalAttempt !== false || isNonRetryable(err);
     log.error(`✘ ${stage}: ${errMsg(err)}`, { itemId, final });
     if (final) {

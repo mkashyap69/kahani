@@ -8,6 +8,9 @@ import {
   deleteMusicTrack,
   uploadMusicTrack,
   type KitStep,
+  createComparison,
+  setChannelImageModel,
+  type ShotKind,
   approveCharacterSheet,
   approveItem,
   approveLocationReference,
@@ -122,6 +125,10 @@ export async function saveChannelAction(form: FormData) {
     motionProvider: str(form, "motionProvider") === "lipsync" ? "lipsync" : "kenburns",
     storyTargetMinutes: Math.min(15, Math.max(8, num(form, "storyTargetMinutes", 10))),
     aiDisclosure: true,
+    imageBatch: bool(form, "imageBatch"),
+    imageModels: Object.fromEntries(
+      ["default", "wide", "medium", "closeup", "over_shoulder", "thumbnail"].map((k) => [k, str(form, `imageModel_${k}`)]).filter(([, v]) => v),
+    ),
   };
   if (!data.name || !data.themeId) throw new Error("name and theme are required");
   const taken = await prisma.channel.findFirst({ where: { themeId: data.themeId, NOT: id ? { id } : undefined } });
@@ -421,4 +428,23 @@ export async function generateMusicAction(form: FormData) {
 export async function deleteMusicAction(id: string) {
   await deleteMusicTrack(id);
   revalidatePath("/music");
+}
+
+// ───────────── image model comparison ─────────────
+export async function createComparisonAction(form: FormData) {
+  const itemId = str(form, "itemId");
+  const models = form.getAll("models").map(String).filter(Boolean);
+  const shots = str(form, "shots")
+    .split(/[\s,]+/)
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  const cmp = await createComparison(itemId, models, shots);
+  await enqueueStudio({ kind: "image-compare", comparisonId: cmp.id });
+  redirect(`/compare/${cmp.id}`);
+}
+
+export async function applyImageModelAction(channelId: string, kind: ShotKind, model: string, comparisonId: string) {
+  await setChannelImageModel(channelId, kind, model);
+  revalidatePath(`/compare/${comparisonId}`);
+  revalidatePath(`/channels/${channelId}`);
 }

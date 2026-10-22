@@ -6,6 +6,7 @@
  *   npm run demo -- --full       # full-length targets (8–15 min story, 120–200 shots)
  *   npm run demo -- --no-publish # stop at the review queue
  *   npm run demo -- --only=story # just the story episode
+ *   npm run demo -- --batch      # use the Gemini Batch API for images
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -21,6 +22,7 @@ async function main() {
   const t0 = Date.now();
   log.info("providers", await providerSummary());
   const channel = await seedDemo();
+  await prisma.channel.update({ where: { id: channel.id }, data: { imageBatch: args.includes("--batch") } });
   const run = await createDailyRun(channel.id, { force: true });
   let items = run.items;
   if (only === "story") {
@@ -34,6 +36,7 @@ async function main() {
   while (queue.length) {
     const job = queue.shift()!;
     if (!items.some((i) => i.id === job.itemId)) continue;
+    if (job.delayMs) await new Promise((r) => setTimeout(r, Math.min(job.delayMs!, 2000))); // deferred (e.g. Gemini batch)
     try {
       queue.push(...(await runStage(job.itemId, job.stage)));
     } catch {

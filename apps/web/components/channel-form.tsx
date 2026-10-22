@@ -1,4 +1,4 @@
-import type { Channel } from "@kahani/core";
+import { IMAGE_MODELS, type Channel } from "@kahani/core";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Select, Switch } from "@/components/ui/input";
 import { SubmitButton } from "@/components/client";
@@ -118,6 +118,39 @@ export function ChannelForm({ channel, themes, musicPacks }: { channel?: Channel
           <Switch name="autoPublish" defaultChecked={c?.autoPublish ?? false} label="Auto-publish" hint="off = finished videos wait in the Review Queue" />
           <Switch name="madeForKids" defaultChecked={c?.madeForKids ?? false} label="Made for kids" hint="sets selfDeclaredMadeForKids on upload" />
           <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">AI-content (synthetic media) disclosure is always on for every upload.</div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Image models</CardTitle>
+          <CardDescription>
+            Pick a model per shot type (blank = use the default). Compare models on real shots on the <a className="text-primary underline" href="/compare">Image models</a> page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {(["default", "wide", "medium", "closeup", "over_shoulder", "thumbnail"] as const).map((kind) => {
+            const current = ((c?.imageModels ?? {}) as Record<string, string>)[kind] ?? "";
+            return (
+              <Field key={kind} label={kind === "default" ? "Default (all shots)" : kind === "over_shoulder" ? "Over-the-shoulder shots" : kind === "thumbnail" ? "Thumbnails" : `${kind[0].toUpperCase()}${kind.slice(1)} shots`}>
+                <Select name={`imageModel_${kind}`} defaultValue={current}>
+                  <option value="">{kind === "default" ? "Nano Banana (env default)" : "— same as default —"}</option>
+                  {IMAGE_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} · ${m.usd}/img
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            );
+          })}
+          <div className="md:col-span-3">
+            <Switch
+              name="imageBatch"
+              defaultChecked={c?.imageBatch ?? false}
+              label="Gemini batch mode (≈50% cheaper)"
+              hint="Gemini shots go through Google's Batch API — results usually within a few hours (max 24h), so it suits the overnight daily run. Anything late or failed falls back to standard calls."
+            />
+          </div>
         </CardContent>
       </Card>
       <SubmitButton pendingText="Saving…">{c ? "Save channel" : "Create channel"}</SubmitButton>

@@ -33,3 +33,6 @@ export * from "./domain/kit.js";
 export * from "./pipeline/launch.js";
 export * from "./pipeline/music.js";
 export { SARVAM_V3_VOICES, voiceCatalog, castVoices, type VoiceInfo } from "./providers/sarvam.js";
+export * from "./pipeline/compare.js";
+export * from "./providers/image-models.js";
+export { generateShotImage } from "./pipeline/images.js";

@@ -76,6 +76,10 @@ model Channel {
   motionProvider     String     @default("kenburns")
   /// Story target length in minutes (8–15)
   storyTargetMinutes Int        @default(10)
+  /// image model per shot type: { default, wide, medium, closeup, over_shoulder, thumbnail } → model id (see IMAGE_MODELS)
+  imageModels        Json       @default("{}")
+  /// use Google's Batch API (≈50% cheaper, results within hours) for Gemini image models
+  imageBatch         Boolean    @default(false)
 
   // branding (from the launch kit or uploaded)
   logoKey          String?
@@ -240,6 +244,8 @@ model ContentItem {
   scheduledPublishAt DateTime?
   youtubeVideoId String?
   memoryApplied Boolean       @default(false)
+  /// in-flight Gemini batch for the image stage: { job, model, submittedAt, keys: {key: shotIdx} }
+  imageBatch    Json?
   reviewNote    String?
 
   shots    Shot[]
@@ -384,4 +390,18 @@ model MusicTrack {
   createdAt   DateTime @default(now())
 
   @@index([pack])
+}
+
+/// Side-by-side image model test on the same shots.
+model ImageComparison {
+  id            String   @id @default(cuid())
+  contentItemId String
+  shotIdxs      Int[]
+  models        String[]
+  status        String   @default("queued")
+  /// [{ model, idx, key, costInr, ms, error }]
+  results       Json     @default("[]")
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

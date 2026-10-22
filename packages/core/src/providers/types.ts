@@ -145,3 +145,25 @@ export interface Publisher {
   readonly name: string;
   publish(channelId: string, req: PublishRequest, ctx: CallContext): Promise<{ videoId: string; url: string }>;
 }
+
+export interface BatchImageRequest {
+  key: string;
+  prompt: string;
+  references: { mime: string; data: Buffer; label?: string }[];
+  aspect: Aspect;
+  meta?: ImageRequest["meta"];
+}
+
+export type BatchPoll =
+  | { done: false; state?: string }
+  | { done: true; failed: string }
+  | { done: true; results: Map<string, { data: Buffer; mime: string } | { error: string }>; failed?: undefined };
+
+/** Asynchronous, discounted image generation (e.g. Gemini Batch API). */
+export interface ImageBatchProvider {
+  readonly name: string;
+  readonly model: string;
+  submit(requests: BatchImageRequest[], label: string): Promise<string>;
+  poll(job: string): Promise<BatchPoll>;
+  cancel(job: string): Promise<void>;
+}

@@ -101,3 +101,14 @@ export class PartialStageError extends Error {
 
 export const shotKey = (itemId: string, idx: number, kind: string, hash: string, ext: string) =>
   `items/${itemId}/${kind}/${String(idx).padStart(4, "0")}-${hash.slice(0, 10)}.${ext}`;
+
+/** Not an error: the stage is waiting on external work (e.g. a Gemini batch) and should run again after `delayMs`. */
+export class StageDeferred extends Error {
+  readonly deferred = true;
+  constructor(
+    message: string,
+    readonly delayMs: number,
+  ) {
+    super(message);
+  }
+}
