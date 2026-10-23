@@ -5,7 +5,7 @@
 export interface ImageModelInfo {
   id: string;
   label: string;
-  provider: "gemini" | "fal" | "byteplus";
+  provider: "gemini" | "fal" | "byteplus" | "apimart" | "evolink";
   /** standard price per image (output) */
   usd: number;
   /** extra price per reference image (models billed per input megapixel) */
@@ -137,6 +137,24 @@ export const IMAGE_MODELS: ImageModelInfo[] = [
     usd: 0.035,
     maxRefs: 14,
     notes: "newer, up to ~14 references",
+  },
+  {
+    id: "apimart:nano-banana",
+    label: "Nano Banana via APIMart (gateway)",
+    provider: "apimart",
+    model: process.env.APIMART_NANO_BANANA_MODEL ?? "gemini-2.5-flash-image",
+    usd: 0.0125, // APIMart listed price; official route only
+    maxRefs: 6,
+    notes: "reseller price, results immediately; falls back to Google on failure",
+  },
+  {
+    id: "evolink:nano-banana",
+    label: "Nano Banana via EvoLink (gateway)",
+    provider: "evolink",
+    model: process.env.EVOLINK_NANO_BANANA_MODEL ?? "gemini-2.5-flash-image",
+    usd: 0.02, // estimate — check EvoLink's pricing page
+    maxRefs: 6,
+    notes: "reseller; falls back to Google on failure",
   },
 ];
 

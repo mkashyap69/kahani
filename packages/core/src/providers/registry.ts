@@ -5,10 +5,12 @@ import { AnthropicLLM } from "./anthropic.js";
 import { GeminiBatch, GeminiImage, GeminiJudge } from "./gemini.js";
 import { FalImage } from "./fal-image.js";
 import { BytePlusImage } from "./byteplus-image.js";
+import { GatewayImage } from "./gateway-image.js";
+import { GATEWAY_SECRET } from "./gateway.js";
 import { DEFAULT_IMAGE_MODEL, imageModelInfo } from "./image-models.js";
 import { SarvamTTS } from "./sarvam.js";
 import { FalLipSyncProvider, KenBurnsProvider } from "./motion.js";
-import { BytePlusI2VBackend, DashScopeI2VBackend, FalI2VBackend, ImageToVideoProvider } from "./i2v.js";
+import { BytePlusI2VBackend, DashScopeI2VBackend, FalI2VBackend, GatewayI2VBackend, ImageToVideoProvider } from "./i2v.js";
 import { videoModelInfo } from "./video-models.js";
 import { YouTubePublisher } from "./youtube.js";
 import { MockLLM } from "./mock/llm.js";
@@ -41,6 +43,11 @@ export async function imageProviderFor(modelId: string): Promise<ImageProvider> 
   if (info.provider === "gemini") {
     const k = await key("GEMINI_API_KEY");
     return k ? new GeminiImage(k, model) : new MockImage(modelId === DEFAULT_IMAGE_MODEL() ? "mock" : modelId);
+  }
+  if (info.provider === "apimart" || info.provider === "evolink") {
+    const k = await key(GATEWAY_SECRET[info.provider]);
+    const direct = await imageProviderFor(DEFAULT_IMAGE_MODEL());
+    return k ? new GatewayImage(k, info, direct) : new MockImage(modelId);
   }
   if (info.provider === "byteplus") {
     const k = await key("BYTEPLUS_ARK_API_KEY");
@@ -76,10 +83,18 @@ export async function musicProvider(): Promise<MusicProvider> {
 export async function motionProvider(channelMotion: string, scope = "closeups"): Promise<MotionProvider> {
   if (channelMotion.startsWith("i2v:")) {
     const info = videoModelInfo(channelMotion);
-    const secret = info.provider === "fal" ? "FAL_KEY" : info.provider === "byteplus" ? "BYTEPLUS_ARK_API_KEY" : "DASHSCOPE_API_KEY";
+    const secret =
+      info.provider === "fal" ? "FAL_KEY" : info.provider === "byteplus" ? "BYTEPLUS_ARK_API_KEY" : info.provider === "dashscope" ? "DASHSCOPE_API_KEY" : GATEWAY_SECRET[info.provider];
     const k = config.providerMode === "mock" ? undefined : await getSecret(secret);
     if (!k) return new KenBurnsProvider();
-    const backend = info.provider === "fal" ? new FalI2VBackend(k, info) : info.provider === "byteplus" ? new BytePlusI2VBackend(k, info) : new DashScopeI2VBackend(k, info);
+    const backend =
+      info.provider === "fal"
+        ? new FalI2VBackend(k, info)
+        : info.provider === "byteplus"
+          ? new BytePlusI2VBackend(k, info)
+          : info.provider === "dashscope"
+            ? new DashScopeI2VBackend(k, info)
+            : new GatewayI2VBackend(k, info);
     return new ImageToVideoProvider(backend, info, scope);
   }
   if (channelMotion === "lipsync") {

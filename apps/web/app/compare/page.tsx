@@ -40,8 +40,8 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
           </CardTitle>
           <CardDescription className="space-x-1">
             {(video
-              ? ([["FAL_KEY", "FLUX 3 Max"], ["BYTEPLUS_ARK_API_KEY", "Seedance"], ["DASHSCOPE_API_KEY", "Wan"]] as const)
-              : ([["GEMINI_API_KEY", "Nano Banana"], ["FAL_KEY", "fal models"], ["BYTEPLUS_ARK_API_KEY", "Seedream (BytePlus)"]] as const)
+              ? ([["FAL_KEY", "FLUX 3 Max"], ["BYTEPLUS_ARK_API_KEY", "Seedance"], ["DASHSCOPE_API_KEY", "Wan"], ["EVOLINK_API_KEY", "EvoLink"], ["APIMART_API_KEY", "APIMart"]] as const)
+              : ([["GEMINI_API_KEY", "Nano Banana"], ["FAL_KEY", "fal models"], ["BYTEPLUS_ARK_API_KEY", "Seedream (BytePlus)"], ["APIMART_API_KEY", "APIMart"], ["EVOLINK_API_KEY", "EvoLink"]] as const)
             ).map(([k, label]) => (
               <span key={k}>
                 {label}: <code>{k}</code> {secrets[k] ? <Badge variant="success">set</Badge> : <Badge variant="muted">missing</Badge>}

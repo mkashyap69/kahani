@@ -6,7 +6,7 @@ export interface VideoModelInfo {
   id: string;
   label: string;
   /** API that serves it */
-  provider: "fal" | "byteplus" | "dashscope";
+  provider: "fal" | "byteplus" | "dashscope" | "apimart" | "evolink";
   /** fal endpoint id */
   endpoint?: string;
   /** BytePlus / DashScope model id */
@@ -74,6 +74,28 @@ export const VIDEO_MODELS: VideoModelInfo[] = [
     minSec: 5,
     maxSec: 5,
     notes: "very cheap; fixed 5 s clips",
+  },
+  {
+    id: "i2v:evolink-seedance-2.0-mini",
+    label: "Seedance 2.0 Mini 480p via EvoLink (gateway)",
+    provider: "evolink",
+    model: process.env.EVOLINK_SEEDANCE_MODEL ?? "seedance-2.0-mini-image-to-video",
+    resolution: "480p",
+    usdPerSec: { list: 0.012 }, // EvoLink "from" price
+    minSec: 4,
+    maxSec: 15,
+    notes: "newer Seedance at reseller price",
+  },
+  {
+    id: "i2v:apimart-seedance-2.0",
+    label: "Seedance 2.0 480p via APIMart (gateway)",
+    provider: "apimart",
+    model: process.env.APIMART_SEEDANCE_MODEL ?? "doubao-seedance-2-0",
+    resolution: "480p",
+    usdPerSec: { list: 0.03 }, // estimate — check APIMart's model page
+    minSec: 4,
+    maxSec: 15,
+    notes: "reseller; price is an estimate",
   },
 ];
 

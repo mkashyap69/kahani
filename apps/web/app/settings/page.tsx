@@ -17,6 +17,8 @@ const LABELS: Record<string, string> = {
   ELEVENLABS_API_KEY: "ElevenLabs (Eleven Music — background music generation)",
   BYTEPLUS_ARK_API_KEY: "BytePlus ModelArk (Seedance video, Seedream images)",
   DASHSCOPE_API_KEY: "Alibaba Cloud Model Studio / DashScope (Wan video)",
+  APIMART_API_KEY: "APIMart gateway (Nano Banana, Seedance — official routes only)",
+  EVOLINK_API_KEY: "EvoLink gateway (Nano Banana, Seedance 2.0 Mini)",
   YOUTUBE_CLIENT_ID: "YouTube OAuth client ID",
   YOUTUBE_CLIENT_SECRET: "YouTube OAuth client secret",
 };

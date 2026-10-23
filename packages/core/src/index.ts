@@ -38,3 +38,4 @@ export * from "./providers/image-models.js";
 export { generateShotImage } from "./pipeline/images.js";
 export * from "./providers/video-models.js";
 export * from "./providers/i2v.js";
+export * from "./providers/gateway.js";

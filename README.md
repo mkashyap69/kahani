@@ -228,6 +228,18 @@ The same rules apply to all of them: the motion scope, clip trimming, dropped mo
 Seedance runs as a ModelArk async task (`/contents/generations/tasks`, first-frame image, `--resolution/--duration/--camerafixed` prompt flags, `generate_audio: false`).
 Wan runs as a DashScope async `video-synthesis` task, polled through `/tasks/{id}`. If a provider rejects a request, the error is logged and that shot uses Ken Burns.
 
+**API gateways (APIMart, EvoLink).** These resellers serve many models behind one key, often below list price. Both use the same task API:
+`POST /v1/{images,videos}/generations`, then poll `GET /v1/tasks/{id}`. The models available through them are:
+- `apimart:nano-banana` (~$0.0125/image) and `evolink:nano-banana` (estimated price);
+- `i2v:evolink-seedance-2.0-mini` (from $0.012/s, 480p) and `i2v:apimart-seedance-2.0` (estimated price).
+
+Set `APIMART_API_KEY` / `EVOLINK_API_KEY` to use them.
+- **Fallback:** if a gateway image call fails, the shot is regenerated with the direct default model (Google), and a failed gateway video falls back to Ken Burns.
+  The daily run never depends on a gateway being up.
+- **Official routes only:** the app doesn't use APIMart's unofficial "-ext" routes.
+- **Model IDs:** the image model IDs (`APIMART_NANO_BANANA_MODEL`, `EVOLINK_NANO_BANANA_MODEL`) and APIMart's Seedance ID (`APIMART_SEEDANCE_MODEL`)
+  weren't confirmed in public docs. Check them in each gateway's dashboard, and override them if the first call is rejected.
+
 **Comparing animation.** The **Animation** tab on the comparison page animates the same 1–5 shot images (dialogue close-ups by default) with 2–4 video models.
 It shows the clips side by side with their cost, time and per-story projections. Buttons apply a model to the channel for close-ups, Shorts or all shots.
 
@@ -372,6 +384,7 @@ npm test
 - `test/script-schema.test.ts`: script JSON validation (fences/prose, normalisation, Devanagari, line length, unknown keys, shot bounds)
 - `test/duration.test.ts`: the shot duration rule, frame alignment, the status machine, timezone scheduling
 - `test/kit.test.ts`: launch-kit schema validation and repair parsing, kid-safety enforcement, voice casting (gender/age fit, distinct voices, clamping, v2/v3 catalogs), music moods
+- `test/gateway.test.ts`: APIMart/EvoLink response parsing, gateway image requests and the fallback to the direct provider, and gateway video requests with clip fitting
 - `test/cheap-models.test.ts`: the no-characters routing rule (text-only models never used with characters), per-reference pricing, the Seedream (BytePlus) request,
   Seedance and Wan task submission and polling against fake servers with exact clip fitting, and the video-comparison shot picker
 - `test/fal-models.test.ts`: FLUX 3 Max promo/list pricing and scope rules, fal request shapes (FLUX 3 `resolution`/`aspect_ratio` vs `image_size`),

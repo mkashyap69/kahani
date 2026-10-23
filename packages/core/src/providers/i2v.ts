@@ -4,6 +4,7 @@ import { logApiCall } from "../cost.js";
 import { config } from "../config.js";
 import { NonRetryableError, sleep, withRetry } from "../util/retry.js";
 import { fitClip, KenBurnsProvider } from "./motion.js";
+import { GatewayClient, type Gateway } from "./gateway.js";
 import { inMotionScope, videoUsdPerSec, type VideoModelInfo } from "./video-models.js";
 import type { CallContext, MotionProvider, MotionRequest } from "./types.js";
 
@@ -131,6 +132,30 @@ export class DashScopeI2VBackend implements I2VBackend {
     if (st === "SUCCEEDED" && r.output?.video_url) return { state: "done", url: r.output.video_url };
     if (st === "FAILED" || st === "CANCELED" || st === "UNKNOWN") return { state: "failed", error: r.output?.message ?? String(st) };
     return { state: "running" };
+  }
+}
+
+/** APIMart / EvoLink video task (Seedance via gateway). */
+export class GatewayI2VBackend implements I2VBackend {
+  private client: GatewayClient;
+  constructor(
+    apiKey: string,
+    private info: VideoModelInfo,
+  ) {
+    this.client = new GatewayClient(info.provider as Gateway, apiKey);
+  }
+  submit(i: I2VInput) {
+    const common = { model: this.info.model, prompt: i.prompt, image_urls: [i.imageDataUri], duration: i.seconds };
+    return this.client.submit(
+      "videos",
+      this.info.provider === "evolink"
+        ? { ...common, aspect_ratio: i.aspect, quality: this.info.resolution }
+        : { ...common, size: i.aspect, resolution: this.info.resolution, generate_audio: false },
+    );
+  }
+  async poll(id: string): Promise<I2VPoll> {
+    const s = await this.client.poll(id);
+    return s.state === "done" ? { state: "done", url: s.urls[0] } : s;
   }
 }
 
